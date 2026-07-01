@@ -1,0 +1,46 @@
+services:
+  - type: web
+    name: iss-merchant-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false          # Set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      - key: CASHFREE_APP_ID
+        sync: false
+      - key: CASHFREE_SECRET_KEY
+        sync: false
+      - key: CASHFREE_BASE_URL
+        value: https://api.cashfree.com/pg
+      - key: CASHFREE_PAYOUT_CLIENT_ID
+        sync: false
+      - key: CASHFREE_PAYOUT_CLIENT_SECRET
+        sync: false
+      - key: CASHFREE_PAYOUT_BASE_URL
+        value: https://payout-api.cashfree.com
+      - key: CASHFREE_WEBHOOK_SECRET
+        sync: false
+      - key: APP_BASE_URL
+        value: https://merchantappold-production.up.railway.app
+      - key: FRONTEND_URL
+        sync: false
+      - key: DEFAULT_COMMISSION_RATE
+        value: "2.0"
+      - key: MIN_SETTLEMENT_AMOUNT
+        value: "100"
+    healthCheckPath: /api/health
+    autoDeploy: true

@@ -1,0 +1,51 @@
+name: merchant_app
+description: "ISS Merchant App - QR Payment Collection & Settlement"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  # State management
+  provider: ^6.1.2
+
+  # HTTP & storage
+  http: ^1.2.1
+  shared_preferences: ^2.3.2
+
+  # QR code display
+  qr_flutter: ^4.1.0
+
+  # Charts
+  fl_chart: ^1.2.0
+  confetti: ^0.8.0
+
+  # Image picker (KYC docs — Flutter official plugin, no KGP issues)
+  image_picker: ^1.1.2
+
+  # Intl for date/currency formatting
+  intl: ^0.20.3
+
+  # Premium typography
+  google_fonts: ^8.1.0
+  permission_handler: ^12.0.3
+
+  # Path provider (save QR image)
+  path_provider: ^2.1.4
+  share_plus: ^13.1.0
+  gal: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/

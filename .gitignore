@@ -1,0 +1,23 @@
+# Node
+backend/node_modules/
+backend/logs/
+backend/.env
+backend/uploads/kyc/*
+!backend/uploads/kyc/.gitkeep
+
+# Flutter
+merchant_app/.dart_tool/
+merchant_app/build/
+merchant_app/.flutter-plugins
+merchant_app/.flutter-plugins-dependencies
+merchant_app/.packages
+merchant_app/android/.gradle/
+merchant_app/android/local.properties
+merchant_app/android/key.properties
+merchant_app/ios/Flutter/flutter_export_environment.sh
+merchant_app/ios/Pods/
+merchant_app/*.keystore
+
+# OS
+.DS_Store
+Thumbs.db

@@ -9,13 +9,26 @@ const logger = require('../utils/logger');
 const CORRECT_BACKEND_URL = 'https://app.pasuai.online';
 
 /**
- * Build the payment URL that gets embedded inside the QR.
- * Always uses CORRECT_BACKEND_URL — ignores APP_BASE_URL to prevent wrong URLs.
+ * Build the UPI deep link that gets embedded inside the QR.
+ * Using UPI deep link means PhonePe/GPay/Paytm will open directly
+ * without any "You are leaving" warning popup.
+ * Falls back to web URL if merchant has no UPI VPA.
  */
-const buildPaymentUrl = (qrId, amount = null) => {
-  const appBase = CORRECT_BACKEND_URL;
+const buildPaymentUrl = (qrId, amount = null, upiVpa = null, merchantName = null) => {
+  // If merchant has UPI VPA, embed UPI deep link — no browser redirect, no warnings
+  if (upiVpa) {
+    const params = new URLSearchParams({
+      pa: upiVpa,
+      pn: merchantName || 'Merchant',
+      cu: 'INR',
+      tn: 'Payment via ISS',
+    });
+    if (amount) params.append('am', amount.toString());
+    return `upi://pay?${params.toString()}`;
+  }
 
-  const base = `${appBase}/api/payment/pay`;
+  // Fallback: web URL (for QRs without UPI VPA)
+  const base = `${CORRECT_BACKEND_URL}/api/payment/pay`;
   const params = new URLSearchParams({ qrId });
   if (amount) params.append('amount', amount);
   return `${base}?${params.toString()}`;
@@ -53,7 +66,8 @@ const createStaticQR = async (merchantId, label = 'Payment QR') => {
   }
 
   const qrId = `QR_${uuidv4().replace(/-/g, '').substring(0, 16).toUpperCase()}`;
-  const paymentUrl = buildPaymentUrl(qrId);
+  const upiVpa = merchant.bankDetails?.upiVpa || null;
+  const paymentUrl = buildPaymentUrl(qrId, null, upiVpa, merchant.businessName);
   const qrImageBase64 = await generateQRImage(paymentUrl);
 
   const qr = await QRCodeModel.create({
@@ -95,7 +109,8 @@ const createDynamicQR = async (merchantId, { amount, label, expiresInMinutes = 3
 
   const qrId = `DQR_${uuidv4().replace(/-/g, '').substring(0, 14).toUpperCase()}`;
   const orderId = generateOrderId('DYN');
-  const paymentUrl = buildPaymentUrl(qrId, amount);
+  const upiVpa = merchant.bankDetails?.upiVpa || null;
+  const paymentUrl = buildPaymentUrl(qrId, amount, upiVpa, merchant.businessName);
   const qrImageBase64 = await generateQRImage(paymentUrl);
 
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);

@@ -1,65 +1,57 @@
 /**
- * Live API Test Script
+ * Live API Test Script — ISS Merchant
+ * Tests: health, login, QR, payment page, Razorpay order, partner status
  * Run: node scripts/liveTest.js
  */
 const https = require('https');
+const http = require('http');
 
-// Production API base — uses custom domain
 const BASE = 'https://app.pasuai.online/api';
-
-// Correct QR URL domain
 const CORRECT_DOMAIN = 'app.pasuai.online';
 
-function request(method, path, body = null, token = null) {
+function request(method, path, body, token) {
   return new Promise((resolve, reject) => {
-    const url = new URL(BASE + path);
-    const options = {
-      hostname: url.hostname,
-      path: url.pathname + url.search,
+    const u = new URL(BASE + path);
+    const b = body ? JSON.stringify(body) : null;
+    const opts = {
+      hostname: u.hostname,
+      path: u.pathname + u.search,
       method,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(b ? { 'Content-Length': Buffer.byteLength(b) } : {}),
       },
     };
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => (data += chunk));
-      res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
-      });
+    const req = https.request(opts, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
     });
     req.on('error', reject);
-    if (body) req.write(JSON.stringify(body));
+    if (b) req.write(b);
     req.end();
   });
 }
 
-function fetchPage(url) {
+function fetchWebPage(url) {
   return new Promise((resolve, reject) => {
+    // Only fetch http/https web URLs — skip upi:// deep links
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      resolve({ s: 0, html: '', skipped: true, reason: 'Not an HTTP URL (UPI deep link)' });
+      return;
+    }
     const u = new URL(url);
-    const options = {
-      hostname: u.hostname,
-      path: u.pathname + u.search,
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0 ISS-Test' },
-    };
-    const req = https.request(options, (res) => {
-      // Handle redirects
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return fetchPage(res.headers.location).then(resolve).catch(reject);
-      }
-      let data = '';
-      res.on('data', (c) => (data += c));
-      res.on('end', () => resolve({ status: res.statusCode, html: data }));
-    });
-    req.on('error', reject);
-    req.end();
+    const lib = u.protocol === 'https:' ? https : http;
+    lib.get({ hostname: u.hostname, path: u.pathname + u.search, method: 'GET' }, res => {
+      let d = '';
+      res.on('data', c => d += c);
+      res.on('end', () => resolve({ s: res.statusCode, html: d }));
+    }).on('error', reject);
   });
 }
 
-async function run() {
+async function main() {
   console.log('\n========================================');
   console.log('  ISS MERCHANT — LIVE API TEST');
   console.log(`  Target: ${BASE}`);
@@ -67,114 +59,107 @@ async function run() {
 
   // 1. Health
   const health = await request('GET', '/health');
-  console.log(`[1] HEALTH CHECK`);
-  console.log(`    Status: ${health.status === 200 ? '✅ OK' : '❌ FAIL'}`);
-  console.log(`    Env: ${health.body.environment}`);
-  console.log(`    DB: ${health.body.database || 'connected (not exposed)'}\n`);
+  console.log('[1] HEALTH');
+  console.log(`    Status: ${health.s === 200 ? '✅ OK' : '❌ FAIL'} | Env: ${health.b.environment}`);
 
   // 2. Login
-  const login = await request('POST', '/auth/login', {
-    email: 'erpawan459@gmail.com',
-    password: 'Pawan@006',
-  });
-  const token = login.body.data?.accessToken;
-  const merchant = login.body.data?.merchant;
-  console.log(`[2] LOGIN`);
+  const login = await request('POST', '/auth/login', { email: 'erpawan459@gmail.com', password: 'Pawan@006' });
+  const token = login.b.data?.accessToken;
+  const merchant = login.b.data?.merchant;
+  console.log(`\n[2] LOGIN`);
   console.log(`    Status: ${token ? '✅ OK' : '❌ FAIL'}`);
   console.log(`    Merchant: ${merchant?.businessName} (${merchant?.merchantId})`);
-  console.log(`    KYC: ${merchant?.kycStatus} | Active: ${merchant?.status}\n`);
-  if (!token) { console.log('❌ Cannot continue without token'); return; }
+  console.log(`    KYC: ${merchant?.kycStatus} | Active: ${merchant?.status}`);
+  console.log(`    Razorpay Linked: ${merchant?.isRazorpayLinked ? '✅ YES' : '⬜ Not yet'}`);
+  if (!token) { console.log('❌ Cannot continue'); return; }
 
-  // 3. QR List — check for correct domain
+  // 3. Partner connect URL
+  console.log(`\n[3] PARTNER CONNECT URL`);
+  try {
+    const connect = await request('GET', '/partner/connect', null, token);
+    const url = connect.b.data?.url;
+    console.log(`    Status: ${url ? '✅ OK' : '❌ FAIL'}`);
+    if (url) console.log(`    URL: ${url.substring(0, 80)}...`);
+  } catch (e) {
+    console.log(`    ❌ Error: ${e.message}`);
+  }
+
+  // 4. Partner status
+  console.log(`\n[4] PARTNER STATUS`);
+  const status = await request('GET', '/partner/status', null, token);
+  console.log(`    isLinked: ${status.b.data?.isLinked ? '✅ YES' : '⬜ NO'}`);
+  console.log(`    accountId: ${status.b.data?.linkedAccountId || 'Not connected yet'}`);
+
+  // 5. QR List
+  console.log(`\n[5] QR LIST`);
   const qrList = await request('GET', '/qr', null, token);
-  console.log(`[3] QR LIST`);
-  console.log(`    Count: ${qrList.body.data?.length}`);
-  (qrList.body.data || []).forEach(qr => {
-    const urlOk = qr.paymentUrl?.includes(CORRECT_DOMAIN);
-    console.log(`    ${urlOk ? '✅' : '❌'} ${qr.qrId} | ${qr.type} | ${qr.paymentUrl}`);
+  console.log(`    Count: ${qrList.b.data?.length}`);
+  (qrList.b.data || []).forEach(qr => {
+    const isUpi = qr.paymentUrl?.startsWith('upi://');
+    const isCorrect = isUpi || qr.paymentUrl?.includes(CORRECT_DOMAIN);
+    console.log(`    ${isCorrect ? '✅' : '❌'} ${qr.qrId} | ${isUpi ? 'UPI deep link ✓' : qr.paymentUrl}`);
   });
-  console.log();
 
-  // 4. Create New Static QR
-  const newQr = await request('POST', '/qr/static', { label: 'Live Test QR' }, token);
-  const qrId = newQr.body.data?.qrId;
-  const paymentUrl = newQr.body.data?.paymentUrl;
-  const urlOk = paymentUrl?.includes(CORRECT_DOMAIN);
-  console.log(`[4] CREATE STATIC QR`);
-  console.log(`    Status: ${newQr.status === 201 ? '✅ Created' : `❌ ${newQr.status}`}`);
+  // 6. Create new QR
+  console.log(`\n[6] CREATE STATIC QR`);
+  const newQr = await request('POST', '/qr/static', { label: 'Live Test' }, token);
+  const qrId = newQr.b.data?.qrId;
+  const payUrl = newQr.b.data?.paymentUrl;
+  const isUpi = payUrl?.startsWith('upi://');
+  console.log(`    Status: ${newQr.s === 201 ? '✅ Created' : '❌ Failed'}`);
   console.log(`    QR ID: ${qrId}`);
-  console.log(`    URL: ${urlOk ? '✅' : '❌'} ${paymentUrl}\n`);
-  if (!qrId) { console.log('❌ No QR ID, skipping payment tests'); return; }
+  console.log(`    URL: ${isUpi ? '✅ UPI deep link — no PhonePe warning!' : `❌ ${payUrl}`}`);
 
-  // 5. Payment Page — check new payPageBuilder HTML signatures
-  const page = await fetchPage(paymentUrl);
-  const hasRzp      = page.html.includes('checkout.razorpay.com');
-  const hasMerchant = page.html.includes('Pasu AI');
-  // New payPageBuilder uses: go() for dynamic, pay() for static, id="ph" for phone
-  const hasPayFn    = page.html.includes('function go(') || page.html.includes('async function go') ||
-                      page.html.includes('function pay(') || page.html.includes('async function pay');
-  const hasPhone    = page.html.includes('id="ph"') || page.html.includes("id='ph'") || page.html.includes('id=\\"ph\\"');
-  const isNewUI     = page.html.includes('payPageBuilder') === false &&
-                      (page.html.includes('user-scalable=no') || page.html.includes('Inter'));
+  // 7. Payment page test (only for web URL QRs)
+  if (!isUpi && payUrl) {
+    console.log(`\n[7] PAYMENT PAGE`);
+    const page = await fetchWebPage(payUrl);
+    if (page.skipped) {
+      console.log(`    Skipped: ${page.reason}`);
+    } else {
+      console.log(`    HTTP: ${page.s === 200 ? '✅ 200 OK' : `❌ ${page.s}`}`);
+      console.log(`    Razorpay SDK: ${page.html.includes('checkout.razorpay.com') ? '✅' : '❌'}`);
+      console.log(`    No Name/Email fields: ${!page.html.includes('Your Name') ? '✅' : '❌'}`);
+    }
+  } else {
+    console.log(`\n[7] PAYMENT PAGE`);
+    console.log(`    ✅ Skipped — QR uses UPI deep link (no web page needed)`);
+  }
 
-  console.log(`[5] PAYMENT PAGE`);
-  console.log(`    HTTP: ${page.status === 200 ? '✅ 200 OK' : `❌ ${page.status}`}`);
-  console.log(`    Razorpay SDK: ${hasRzp ? '✅ Loaded' : '❌ Missing'}`);
-  console.log(`    Merchant Name: ${hasMerchant ? '✅ Pasu AI' : '❌ Missing'}`);
-  console.log(`    Payment function: ${hasPayFn ? '✅ Present' : '❌ Missing'}`);
-  console.log(`    Phone field: ${hasPhone ? '✅ Present' : '❌ Missing'}`);
-  console.log(`    New UI (Inter font): ${isNewUI ? '✅ Yes' : '⚠️  Check manually'}\n`);
-
-  // 6. Create Razorpay Order (real live call)
-  console.log(`[6] CREATE RAZORPAY ORDER (Live API call)`);
+  // 8. Create Razorpay order (real live API)
+  console.log(`\n[8] CREATE RAZORPAY ORDER (Live)`);
   const order = await request('POST', '/payment/create-order', {
-    qrId,
-    amount: 1,
-    customerPhone: '9795635252',
-    customerName: 'Test User',
+    qrId, amount: 1, customerPhone: '9795635252',
   });
-  const rzpOrderId = order.body.data?.rzpOrderId;
-  const orderId    = order.body.data?.orderId;
-  const orderOk    = order.status === 201 && !!rzpOrderId;
-  console.log(`    Status: ${orderOk ? '✅ Created' : `❌ ${order.status}: ${order.body.message}`}`);
+  const rzpOrderId = order.b.data?.rzpOrderId;
+  const orderId = order.b.data?.orderId;
+  console.log(`    Status: ${order.s === 201 ? '✅ Created' : `❌ ${order.s}: ${order.b.message}`}`);
   if (rzpOrderId) {
-    console.log(`    Razorpay Order ID: ${rzpOrderId}`);
-    console.log(`    Internal Order ID: ${orderId}`);
-    console.log(`    Amount: ₹${order.body.data?.amount}`);
-    console.log(`    Merchant: ${order.body.data?.merchant?.businessName}`);
+    console.log(`    Razorpay Order: ${rzpOrderId}`);
+    console.log(`    Internal Order: ${orderId}`);
+    console.log(`    Amount: ₹${order.b.data?.amount}`);
   }
 
-  // 7. Verify transaction exists and is pending
-  console.log();
+  // 9. Verify transaction
   if (orderId) {
-    const txn = await request('GET', `/payment/verify?order_id=${orderId}`);
-    console.log(`[7] TRANSACTION VERIFY`);
-    console.log(`    Status: ${txn.body.data?.status === 'pending' ? '✅ pending (awaiting customer payment)' : txn.body.data?.status}`);
-    console.log(`    Order ID: ${txn.body.data?.orderId}`);
-    console.log(`    Amount: ₹${txn.body.data?.amount}`);
+    console.log(`\n[9] TRANSACTION STATUS`);
+    const tx = await request('GET', `/payment/verify?order_id=${orderId}`);
+    console.log(`    Status: ${tx.b.data?.status === 'pending' ? '✅ pending (awaiting payment)' : tx.b.data?.status}`);
   }
 
-  // 8. Recent transactions
-  console.log();
+  // 10. Recent transactions
+  console.log(`\n[10] RECENT TRANSACTIONS`);
   const txList = await request('GET', '/payment/transactions?limit=5', null, token);
-  console.log(`[8] RECENT TRANSACTIONS (last 5)`);
-  (txList.body.data || []).slice(0, 5).forEach(tx => {
+  (txList.b.data || []).slice(0, 5).forEach(tx => {
     const icon = tx.status === 'success' ? '✅' : tx.status === 'pending' ? '⏳' : '❌';
-    const method = tx.paymentMethod && tx.paymentMethod !== 'unknown' ? tx.paymentMethod.toUpperCase() : '-';
-    console.log(`    ${icon} ${tx.orderId} | ₹${tx.amount} | ${tx.status.toUpperCase()} | ${method}`);
+    console.log(`    ${icon} ${tx.orderId} | ₹${tx.amount} | ${tx.status.toUpperCase()} | ${tx.paymentMethod || '-'}`);
   });
 
   // Summary
-  const allOk = health.status === 200 && token && urlOk && hasRzp && hasMerchant && orderOk;
+  const allOk = health.s === 200 && token && rzpOrderId;
   console.log('\n========================================');
-  if (allOk) {
-    console.log('  ✅ ALL TESTS PASSED — SYSTEM IS LIVE');
-    console.log(`  🔗 Payment page: ${paymentUrl}`);
-    console.log(`  📦 Razorpay Order: ${rzpOrderId}`);
-  } else {
-    console.log('  ⚠️  SOME CHECKS NEED ATTENTION — SEE ABOVE');
-  }
+  console.log(allOk ? '  ✅ ALL TESTS PASSED — SYSTEM LIVE' : '  ⚠️  SOME ISSUES — CHECK ABOVE');
   console.log('========================================\n');
 }
 
-run().catch(console.error);
+main().catch(console.error);

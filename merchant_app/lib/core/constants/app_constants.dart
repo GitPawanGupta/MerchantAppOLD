@@ -1,7 +1,7 @@
 class AppConstants {
   // ── API ────────────────────────────────────────────────────────────────────
-  // Primary: Custom domain (Cloudflare + Railway verified ✅)
-  static const String baseUrl = 'https://api.pasuai.online/api';
+  // Primary: app.pasuai.online (Railway — Razorpay verified ✅)
+  static const String baseUrl = 'https://app.pasuai.online/api';
 
   // ── Payment page base URL (Railway backend) ────────────────────────────────
   // QR payment links are served by the Railway backend.

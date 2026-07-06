@@ -53,7 +53,10 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
           'You can reconnect anytime.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: AppTheme.error),
@@ -68,6 +71,7 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
     setState(() => _disconnecting = true);
     try {
       await ApiService.post('/partner/disconnect', {});
+      if (!mounted) return;
       await context.read<AuthProvider>().refreshProfile();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,7 +81,10 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}'), backgroundColor: AppTheme.error),
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: AppTheme.error,
+          ),
         );
       }
     } finally {
@@ -119,17 +126,28 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
               child: Column(
                 children: [
                   Container(
-                    width: 64, height: 64,
+                    width: 64,
+                    height: 64,
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: const Icon(Icons.account_balance, color: Colors.white, size: 32),
+                    child: const Icon(
+                      Icons.account_balance,
+                      color: Colors.white,
+                      size: 32,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    isLinked ? 'Razorpay Connected ✓' : 'Connect Your Razorpay Account',
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+                    isLinked
+                        ? 'Razorpay Connected ✓'
+                        : 'Connect Your Razorpay Account',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
@@ -137,7 +155,10 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
                     isLinked
                         ? 'Payments are automatically routed to your account'
                         : 'Enable automatic payment settlements directly to your account',
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.85), fontSize: 13),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.85),
+                      fontSize: 13,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -159,7 +180,8 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
                 icon: Icons.flash_on,
                 iconColor: AppTheme.primary,
                 title: 'Instant Settlements',
-                subtitle: 'Payments are transferred to your account automatically after capture',
+                subtitle:
+                    'Payments are transferred to your account automatically after capture',
               ),
               const SizedBox(height: 12),
               _infoCard(
@@ -175,39 +197,54 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _disconnecting ? null : _disconnect,
                   icon: _disconnecting
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.link_off),
-                  label: Text(_disconnecting ? 'Disconnecting...' : 'Disconnect Account'),
+                  label: Text(
+                    _disconnecting ? 'Disconnecting...' : 'Disconnect Account',
+                  ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.error,
                     side: BorderSide(color: AppTheme.error),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                 ),
               ),
             ] else ...[
               // Not connected state — benefits
-              const Text('Why connect?', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              const Text(
+                'Why connect?',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              ),
               const SizedBox(height: 12),
               _benefitTile(
                 icon: Icons.bolt,
                 title: 'Instant Settlements',
-                desc: 'Get paid instantly after every customer payment — no waiting',
+                desc:
+                    'Get paid instantly after every customer payment — no waiting',
               ),
               _benefitTile(
                 icon: Icons.account_balance_wallet,
                 title: 'Direct to Your Account',
-                desc: 'Money goes straight to your Razorpay account, minus platform fee',
+                desc:
+                    'Money goes straight to your Razorpay account, minus platform fee',
               ),
               _benefitTile(
                 icon: Icons.auto_fix_high,
                 title: 'Automatic Commission',
-                desc: 'ISS platform commission is split automatically — no manual work',
+                desc:
+                    'ISS platform commission is split automatically — no manual work',
               ),
               _benefitTile(
                 icon: Icons.security,
                 title: 'Secure OAuth',
-                desc: 'Industry-standard OAuth 2.0 — we never store your Razorpay credentials',
+                desc:
+                    'Industry-standard OAuth 2.0 — we never store your Razorpay credentials',
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -216,16 +253,28 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _loading ? null : _connectRazorpay,
                   icon: _loading
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Icon(Icons.link),
                   label: Text(
                     _loading ? 'Opening Razorpay...' : 'Connect with Razorpay',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                 ),
@@ -245,31 +294,54 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
     );
   }
 
-  Widget _infoCard({required IconData icon, required Color iconColor, required String title, required String subtitle}) {
+  Widget _infoCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8),
+        ],
       ),
       child: Row(
         children: [
           Icon(icon, color: iconColor, size: 28),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              const SizedBox(height: 3),
-              Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _benefitTile({required IconData icon, required String title, required String desc}) {
+  Widget _benefitTile({
+    required IconData icon,
+    required String title,
+    required String desc,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Row(
@@ -285,11 +357,23 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-              const SizedBox(height: 3),
-              Text(desc, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  desc,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                ),
+              ],
+            ),
           ),
         ],
       ),

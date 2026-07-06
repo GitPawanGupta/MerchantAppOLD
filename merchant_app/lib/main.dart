@@ -21,7 +21,7 @@ import 'screens/profile/kyc_screen.dart';
 import 'screens/profile/bank_details_screen.dart';
 import 'screens/profile/bank_accounts_screen.dart';
 import 'screens/profile/change_password_screen.dart';
-import 'screens/profile/connect_razorpay_screen.dart';
+import 'screens/profile/edit_profile_screen.dart';
 import 'screens/profile/connect_razorpay_screen.dart';
 import 'screens/reports/reports_screen.dart';
 import 'screens/admin/admin_shell.dart';

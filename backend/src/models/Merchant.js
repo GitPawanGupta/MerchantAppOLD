@@ -19,6 +19,7 @@ const bankDetailsSchema = new mongoose.Schema(
     },
     isVerified: { type: Boolean, default: false },
     verifiedAt: { type: Date },
+    upiVpa: { type: String, trim: true, default: null },
   },
 );
 

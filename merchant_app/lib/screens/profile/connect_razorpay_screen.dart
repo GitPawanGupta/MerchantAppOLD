@@ -24,10 +24,23 @@ class _ConnectRazorpayScreenState extends State<ConnectRazorpayScreen> {
       if (url == null) throw Exception('No URL received');
 
       final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        throw Exception('Cannot open browser');
+
+      // Try external browser first, fallback to in-app WebView
+      bool launched = false;
+      try {
+        launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {}
+
+      if (!launched) {
+        try {
+          launched = await launchUrl(uri, mode: LaunchMode.inAppWebView);
+        } catch (_) {}
+      }
+
+      if (!launched) {
+        throw Exception(
+          'Cannot open browser. Please check if a browser app is installed.',
+        );
       }
     } catch (e) {
       if (mounted) {

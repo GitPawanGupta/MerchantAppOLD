@@ -154,9 +154,40 @@ const merchantSchema = new mongoose.Schema(
       default: 'pending',
     },
 
-    // Cashfree beneficiary ID (for payout)
+    // Cashfree beneficiary ID (for payout) — kept for legacy, not used with Partner Tech
     cashfreeBeneficiaryId: {
       type: String,
+    },
+
+    // ─── Razorpay Partner Technology ─────────────────────────────────────────
+    // Set when merchant completes OAuth flow to connect their Razorpay account
+    razorpayLinkedAccountId: {
+      type: String,
+      default: null,  // e.g. "acc_XXXXXXXXXX" — merchant's Razorpay account
+    },
+    razorpayAccessToken: {
+      type: String,
+      default: null,  // OAuth access token for API calls on behalf of merchant
+    },
+    razorpayRefreshToken: {
+      type: String,
+      default: null,
+    },
+    razorpayTokenExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    razorpayPublicToken: {
+      type: String,
+      default: null,  // Used as key_id when creating orders on merchant account
+    },
+    isRazorpayLinked: {
+      type: Boolean,
+      default: false, // true once merchant completes OAuth connect
+    },
+    razorpayLinkedAt: {
+      type: Date,
+      default: null,
     },
 
     // Wallet / balance tracking

@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { razorpayClient, RAZORPAY_CONFIG } = require('../config/razorpay');
+const partnerService = require('./partnerService');
 const Transaction = require('../models/Transaction');
 const QRCodeModel = require('../models/QRCode');
 const Merchant = require('../models/Merchant');
@@ -282,7 +283,7 @@ const applyPaymentUpdate = async (transaction, payment, webhookPayload = null) =
 
   await transaction.save();
 
-  // On success — update merchant totals and QR stats, then trigger settlement
+  // On success — update merchant totals and QR stats, then route payment
   if (internalStatus === 'success') {
     await Promise.all([
       Merchant.findByIdAndUpdate(transaction.merchantId, {
@@ -297,18 +298,40 @@ const applyPaymentUpdate = async (transaction, payment, webhookPayload = null) =
       }),
     ]);
 
-    // Trigger instant settlement (non-blocking) if merchant prefers it
+    // Route settlement to merchant's linked Razorpay account (non-blocking)
     setImmediate(async () => {
       try {
         const merchant = await Merchant.findById(transaction.merchantId);
-        if (merchant && merchant.settlementPreference === 'instant') {
-          const settlementService = require('./settlementService');
-          await settlementService.triggerInstantSettlement(transaction.merchantId, [transaction._id]);
-        } else {
-          logger.info(`Instant settlement skipped for tx ${transaction.orderId}: merchant set to on_demand/manual`);
+
+        if (merchant && merchant.isRazorpayLinked && merchant.razorpayLinkedAccountId) {
+          // Partner Technology: Route payment to merchant's linked account
+          const rzpPaymentId = transaction.cfPaymentId;
+          if (rzpPaymentId && rzpPaymentId.startsWith('pay_')) {
+            await partnerService.createTransfer({
+              paymentId: rzpPaymentId,
+              merchantLinkedAccountId: merchant.razorpayLinkedAccountId,
+              settlementAmount: transaction.settlementAmount,
+              orderId: transaction.orderId,
+            });
+            // Mark as settled via Route
+            await Transaction.findByIdAndUpdate(transaction._id, {
+              isSettled: true,
+              settledAt: new Date(),
+            });
+            await Merchant.findByIdAndUpdate(transaction.merchantId, {
+              $inc: {
+                totalSettled: transaction.settlementAmount,
+                pendingSettlement: -transaction.settlementAmount,
+              },
+            });
+            logger.info(`Route transfer done for tx ${transaction.orderId}: ₹${transaction.settlementAmount} → ${merchant.razorpayLinkedAccountId}`);
+          }
+        } else if (merchant && merchant.settlementPreference === 'instant') {
+          // Fallback: no linked account — use manual settlement queue
+          logger.info(`Merchant ${merchant.merchantId} not linked to Razorpay Partner — queuing for manual settlement`);
         }
       } catch (e) {
-        logger.error(`Instant settlement failed for tx ${transaction.orderId}: ${e.message}`);
+        logger.error(`Route transfer failed for tx ${transaction.orderId}: ${e.message}`);
       }
     });
   }

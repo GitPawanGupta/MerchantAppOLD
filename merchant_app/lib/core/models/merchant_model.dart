@@ -12,6 +12,11 @@ class MerchantModel {
   final int bankAccountCount;
   final String settlementPreference;
 
+  // Razorpay Partner Technology
+  final bool isRazorpayLinked;
+  final String? razorpayLinkedAccountId;
+  final String? razorpayLinkedAt;
+
   const MerchantModel({
     required this.id,
     required this.merchantId,
@@ -25,6 +30,9 @@ class MerchantModel {
     this.bankDetails,
     this.bankAccountCount = 0,
     this.settlementPreference = 'instant',
+    this.isRazorpayLinked = false,
+    this.razorpayLinkedAccountId,
+    this.razorpayLinkedAt,
   });
 
   factory MerchantModel.fromJson(Map<String, dynamic> j) => MerchantModel(
@@ -47,6 +55,9 @@ class MerchantModel {
       return 0;
     }(),
     settlementPreference: j['settlementPreference'] ?? 'instant',
+    isRazorpayLinked: j['isRazorpayLinked'] ?? false,
+    razorpayLinkedAccountId: j['razorpayLinkedAccountId'],
+    razorpayLinkedAt: j['razorpayLinkedAt'],
   );
 }
 

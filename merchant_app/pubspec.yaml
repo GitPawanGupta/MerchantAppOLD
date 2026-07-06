@@ -40,6 +40,9 @@ dependencies:
   share_plus: ^13.1.0
   gal: ^2.3.2
 
+  # URL launcher (for Razorpay OAuth)
+  url_launcher: ^6.3.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -18,14 +18,22 @@ const getProfile = async (merchantId) => {
 
   const data = merchant.toObject();
 
-  // Remove commission rate — not visible to merchant
+  // Remove sensitive/internal fields not visible to merchant
   delete data.commissionRate;
   delete data.totalCommission;
+  delete data.cashfreeBeneficiaryId;
+  delete data.razorpayAccessToken;
+  delete data.razorpayRefreshToken;
 
   // Mask sensitive bank account number
   if (data.bankDetails?.accountNumber) {
     data.bankDetails.accountNumber = maskString(data.bankDetails.accountNumber, 4);
   }
+
+  // Add razorpay connection status (safe fields only)
+  data.isRazorpayLinked = merchant.isRazorpayLinked || false;
+  data.razorpayLinkedAccountId = merchant.razorpayLinkedAccountId || null;
+  data.razorpayLinkedAt = merchant.razorpayLinkedAt || null;
 
   return data;
 };

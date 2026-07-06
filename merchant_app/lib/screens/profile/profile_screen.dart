@@ -232,6 +232,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                           Navigator.pushNamed(context, '/bank-accounts'),
                     ),
                     _MenuItem(
+                      icon: Icons.link,
+                      label: 'Connect Razorpay',
+                      subtitle: (merchant?.isRazorpayLinked ?? false)
+                          ? 'CONNECTED ✓'
+                          : 'Not connected',
+                      subtitleColor: (merchant?.isRazorpayLinked ?? false)
+                          ? Colors.green
+                          : AppTheme.textSecondary,
+                      onTap: () =>
+                          Navigator.pushNamed(context, '/connect-razorpay'),
+                    ),
+                    _MenuItem(
                       icon: Icons.lock_outline_rounded,
                       label: 'Change Password',
                       onTap: () =>

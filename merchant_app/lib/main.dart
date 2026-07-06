@@ -5,7 +5,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/services/auth_service.dart';
 import 'core/theme/app_theme.dart';
-
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/dashboard/home_shell.dart';
@@ -22,7 +21,8 @@ import 'screens/profile/kyc_screen.dart';
 import 'screens/profile/bank_details_screen.dart';
 import 'screens/profile/bank_accounts_screen.dart';
 import 'screens/profile/change_password_screen.dart';
-import 'screens/profile/edit_profile_screen.dart';
+import 'screens/profile/connect_razorpay_screen.dart';
+import 'screens/profile/connect_razorpay_screen.dart';
 import 'screens/reports/reports_screen.dart';
 import 'screens/admin/admin_shell.dart';
 import 'screens/admin/admin_bank_accounts_screen.dart';
@@ -124,6 +124,8 @@ class MerchantApp extends StatelessWidget {
         return _slide(const BankAccountsScreen());
       case '/change-password':
         return _slide(const ChangePasswordScreen());
+      case '/connect-razorpay':
+        return _slide(const ConnectRazorpayScreen());
 
       default:
         return _slide(const LoginScreen());

@@ -28,7 +28,6 @@ const createOrder = async (req, res, next) => {
     return successResponse(res, {
       orderId: result.orderId,
       rzpOrderId: result.rzpOrderId,
-      cfOrderId: result.cfOrderId,
       amount: result.amount,
       merchant: result.merchant,
     }, 'Payment order created', 201);

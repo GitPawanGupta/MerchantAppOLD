@@ -391,13 +391,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (_balanceData == null) return const SizedBox.shrink();
 
     final double totalCommission =
-        (_balanceData!['totalCommission'] as num?)?.toDouble() ?? 0.0;
+        (_balanceData!['totalCollected'] as num?)?.toDouble() ?? 0.0;
     final double totalSettled =
-        (_balanceData!['totalSettled'] as num?)?.toDouble() ?? 0.0;
-    final double totalProcessing =
-        (_balanceData!['totalProcessing'] as num?)?.toDouble() ?? 0.0;
+        (_balanceData!['totalPaidOut'] as num?)?.toDouble() ?? 0.0;
+    final double totalProcessing = 0.0; // Not tracked separately in backend
     final double withdrawableBalance =
-        (_balanceData!['withdrawableBalance'] as num?)?.toDouble() ?? 0.0;
+        (_balanceData!['availableBalance'] as num?)?.toDouble() ?? 0.0;
 
     return GradientCard(
       gradient: AppTheme.headerGradient,

@@ -283,8 +283,9 @@ const getAdminCommissionBalance = async () => {
 
   const [collectedResult, paidOutResult] = await Promise.all([
     // Total commission ever collected across all merchant settlements
+    // Include both 'pending' and 'settled' status as they both represent earned commission
     CommissionLedger.aggregate([
-      { $match: { status: 'settled' } },
+      { $match: { status: { $in: ['pending', 'settled'] } } },
       {
         $group: {
           _id: null,

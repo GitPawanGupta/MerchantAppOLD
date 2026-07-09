@@ -257,8 +257,8 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: AppTheme.accent.withOpacity(
-                                            0.1,
+                                          color: AppTheme.accent.withValues(
+                                            alpha: 0.1,
                                           ),
                                           borderRadius: BorderRadius.circular(
                                             4,
@@ -315,10 +315,10 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.05),
+                      color: AppTheme.primary.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: AppTheme.primary.withOpacity(0.2),
+                        color: AppTheme.primary.withValues(alpha: 0.2),
                       ),
                     ),
                     child: Column(
@@ -343,7 +343,7 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
-                                selectedMerchant!['businessName'] ?? '',
+                                selectedMerchant?['businessName'] ?? '',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
@@ -362,7 +362,7 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              selectedMerchant!['merchantId'] ?? '',
+                              selectedMerchant?['merchantId'] ?? '',
                               style: const TextStyle(
                                 fontSize: 11,
                                 fontFamily: 'monospace',
@@ -430,7 +430,7 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
 
     if (confirmed != true || selectedMerchant == null) return;
 
-    final merchantId = selectedMerchant['merchantId'] as String? ?? '';
+    final merchantId = selectedMerchant?['merchantId'] as String? ?? '';
     final rate = double.tryParse(rateCtrl.text.trim());
 
     if (merchantId.isEmpty) {
@@ -449,7 +449,7 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
           'description': descCtrl.text.trim(),
       });
       _showSnack(
-        'Commission for ${selectedMerchant['businessName']} set to $rate%',
+        'Commission for ${selectedMerchant?['businessName'] ?? merchantId} set to $rate%',
       );
       _load();
     } on ApiException catch (e) {

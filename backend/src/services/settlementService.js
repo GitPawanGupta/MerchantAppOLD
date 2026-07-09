@@ -126,11 +126,12 @@ const manualMerchantSettlement = async (merchantId, bankAccountId) => {
     throw err;
   }
 
-  // Gather all unsettled successful transactions
+  // Gather all unsettled successful transactions (not already in a pending settlement)
   const transactions = await Transaction.find({
     merchantId,
     status: 'success',
     isSettled: false,
+    settlementId: null, // Not already linked to another settlement
   });
 
   if (transactions.length === 0) {

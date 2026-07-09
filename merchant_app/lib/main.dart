@@ -30,6 +30,7 @@ import 'screens/admin/admin_shell.dart';
 import 'screens/admin/admin_bank_accounts_screen.dart';
 import 'screens/admin/admin_merchants_screen.dart';
 import 'screens/admin/admin_settlements_screen.dart';
+import 'screens/admin/admin_transactions_screen.dart';
 import 'core/models/qr_model.dart';
 
 void main() async {
@@ -103,6 +104,8 @@ class MerchantApp extends StatelessWidget {
         return _slide(const AdminMerchantsScreen());
       case '/admin/settlements':
         return _slide(const AdminSettlementsScreen());
+      case '/admin/transactions':
+        return _slide(const AdminTransactionsScreen());
       // ── QR ────────────────────────────────────────────────────────────────
       case '/qr-list':
         return _slide(const QRListScreen());

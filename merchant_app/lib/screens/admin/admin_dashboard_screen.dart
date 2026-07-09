@@ -510,6 +510,67 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         _buildCommissionCard(),
         const SizedBox(height: 16),
 
+        // ── Pending transactions alert ────────────────────────────
+        InkWell(
+          onTap: () => Navigator.pushNamed(context, '/admin/transactions'),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppTheme.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.credit_card_outlined,
+                    color: AppTheme.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Manage Transactions',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Review and update payment status',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 16,
+                  color: AppTheme.primary,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
         // ── Pending settlements alert ──────────────────────────────
         if ((pending['count'] ?? 0) > 0) ...[
           Container(

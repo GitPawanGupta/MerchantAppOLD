@@ -389,6 +389,117 @@ const getTransactionDetail = async (req, res, next) => {
   }
 };
 
+/**
+ * PATCH /api/admin/transactions/:orderId/status
+ * Manually update transaction status (e.g., pending -> success)
+ * Used when payment gateway webhook fails or manual verification is needed
+ */
+const updateTransactionStatus = async (req, res, next) => {
+  try {
+    const { status, paymentMethod, upiTransactionId, failureReason, notes } = req.body;
+
+    // Validate status
+    const validStatuses = ['success', 'failed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return errorResponse(
+        res,
+        `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        400
+      );
+    }
+
+    // Find transaction
+    const tx = await Transaction.findOne({ orderId: req.params.orderId })
+      .populate('merchantId', 'merchantId businessName');
+
+    if (!tx) {
+      return errorResponse(res, 'Transaction not found', 404);
+    }
+
+    // Prevent updating already successful/refunded transactions
+    if (tx.status === 'success' && status !== 'success') {
+      return errorResponse(res, 'Cannot modify successful transaction', 400);
+    }
+    if (tx.status === 'refunded') {
+      return errorResponse(res, 'Cannot modify refunded transaction', 400);
+    }
+
+    // Already in the same status
+    if (tx.status === status) {
+      return errorResponse(res, `Transaction is already marked as ${status}`, 400);
+    }
+
+    const oldStatus = tx.status;
+
+    // Update transaction fields
+    tx.status = status;
+    
+    if (status === 'success') {
+      tx.paymentTime = tx.paymentTime || new Date();
+      if (paymentMethod) tx.paymentMethod = paymentMethod;
+      if (upiTransactionId) tx.upiTransactionId = upiTransactionId;
+      tx.failureReason = undefined; // Clear any previous failure reason
+    } else if (status === 'failed' || status === 'cancelled') {
+      tx.failureReason = failureReason || `Manually marked as ${status} by admin`;
+    }
+
+    await tx.save();
+
+    // Audit log
+    logger.info(
+      `Admin ${req.user._id} manually updated transaction ${tx.orderId} from ${oldStatus} to ${status}. ` +
+      `Merchant: ${tx.merchantId.merchantId}. Notes: ${notes || 'N/A'}`
+    );
+
+    // If marking as success, update merchant balance
+    if (status === 'success' && oldStatus !== 'success') {
+      await Merchant.findByIdAndUpdate(tx.merchantId._id, {
+        $inc: { 
+          totalRevenue: tx.amount,
+          availableBalance: tx.settlementAmount,
+          totalCommission: tx.commissionAmount
+        },
+        lastTransactionDate: new Date(),
+      });
+
+      logger.info(
+        `Updated merchant ${tx.merchantId.merchantId} balance. ` +
+        `Settlement amount: ₹${tx.settlementAmount}, Commission: ₹${tx.commissionAmount}`
+      );
+    }
+
+    return successResponse(
+      res,
+      {
+        orderId: tx.orderId,
+        status: tx.status,
+        amount: tx.amount,
+        merchantId: tx.merchantId.merchantId,
+        businessName: tx.merchantId.businessName,
+        updatedBy: req.user.email,
+        updatedAt: tx.updatedAt,
+      },
+      `Transaction status updated to ${status}`
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Validation for transaction status update
+const transactionStatusValidation = [
+  body('status')
+    .isIn(['success', 'failed', 'cancelled'])
+    .withMessage('Status must be success, failed, or cancelled'),
+  body('paymentMethod')
+    .optional()
+    .isIn(['upi', 'card', 'netbanking', 'wallet', 'emi'])
+    .withMessage('Invalid payment method'),
+  body('upiTransactionId').optional().trim().isLength({ max: 100 }),
+  body('failureReason').optional().trim().isLength({ max: 300 }),
+  body('notes').optional().trim().isLength({ max: 500 }),
+];
+
 // ─── Settlement Management ────────────────────────────────────────────────────
 
 /**
@@ -975,6 +1086,7 @@ module.exports = {
   kycActionValidation,
   merchantStatusValidation,
   bankValidation,
+  transactionStatusValidation,
   // Dashboard
   getDashboard,
   // Merchants
@@ -987,6 +1099,7 @@ module.exports = {
   // Transactions
   listAllTransactions,
   getTransactionDetail,
+  updateTransactionStatus,
   // Settlements
   listAllSettlements,
   getSettlementDetail,

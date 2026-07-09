@@ -36,6 +36,12 @@ router.post('/merchants/:merchantId/settle', adminController.manualSettle);
 // ── Transaction Management ────────────────────────────────────────────────────
 router.get('/transactions', adminController.listAllTransactions);
 router.get('/transactions/:orderId', adminController.getTransactionDetail);
+router.patch(
+  '/transactions/:orderId/status',
+  adminController.transactionStatusValidation,
+  validate,
+  adminController.updateTransactionStatus
+);
 
 // ── Settlement Management ─────────────────────────────────────────────────────
 router.get('/settlements', adminController.listAllSettlements);

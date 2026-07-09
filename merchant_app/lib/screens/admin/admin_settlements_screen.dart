@@ -85,14 +85,11 @@ class _AdminSettlementsScreenState extends State<AdminSettlementsScreen> {
     if (utr == null || utr.isEmpty) return;
 
     try {
-      await ApiService.patch(
-        '/admin/settlements/$settlementRef/status',
-        {
-          'status': 'success',
-          'payoutReferenceId': utr,
-          'payoutMode': 'UPI', // Default, can be made dynamic
-        },
-      );
+      await ApiService.patch('/admin/settlements/$settlementRef/status', {
+        'status': 'success',
+        'payoutReferenceId': utr,
+        'payoutMode': 'UPI', // Default, can be made dynamic
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -133,9 +130,7 @@ class _AdminSettlementsScreenState extends State<AdminSettlementsScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primary,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
             child: const Text('Approve All'),
           ),
         ],
@@ -153,9 +148,7 @@ class _AdminSettlementsScreenState extends State<AdminSettlementsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              '✓ ${_selectedRefs.length} settlements approved',
-            ),
+            content: Text('✓ ${_selectedRefs.length} settlements approved'),
             backgroundColor: Colors.green,
           ),
         );
@@ -289,41 +282,41 @@ class _AdminSettlementsScreenState extends State<AdminSettlementsScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _settlements.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        onRefresh: _loadSettlements,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _settlements.length,
-                          itemBuilder: (_, i) {
-                            final settlement = _settlements[i];
-                            final ref = settlement['settlementRef'] as String;
-                            final isSelected = _selectedRefs.contains(ref);
+                ? _buildEmptyState()
+                : RefreshIndicator(
+                    onRefresh: _loadSettlements,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _settlements.length,
+                      itemBuilder: (_, i) {
+                        final settlement = _settlements[i];
+                        final ref = settlement['settlementRef'] as String;
+                        final isSelected = _selectedRefs.contains(ref);
 
-                            return _SettlementCard(
-                              settlement: settlement,
-                              bulkMode: _bulkMode,
-                              isSelected: isSelected,
-                              onTap: () {
-                                if (_bulkMode) {
-                                  setState(() {
-                                    if (isSelected) {
-                                      _selectedRefs.remove(ref);
-                                    } else {
-                                      _selectedRefs.add(ref);
-                                    }
-                                  });
+                        return _SettlementCard(
+                          settlement: settlement,
+                          bulkMode: _bulkMode,
+                          isSelected: isSelected,
+                          onTap: () {
+                            if (_bulkMode) {
+                              setState(() {
+                                if (isSelected) {
+                                  _selectedRefs.remove(ref);
                                 } else {
-                                  _showTransferDetails(ref);
+                                  _selectedRefs.add(ref);
                                 }
-                              },
-                              onApprove: settlement['status'] == 'pending'
-                                  ? () => _approveSettlement(ref)
-                                  : null,
-                            );
+                              });
+                            } else {
+                              _showTransferDetails(ref);
+                            }
                           },
-                        ),
-                      ),
+                          onApprove: settlement['status'] == 'pending'
+                              ? () => _approveSettlement(ref)
+                              : null,
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
@@ -363,10 +356,7 @@ class _AdminSettlementsScreenState extends State<AdminSettlementsScreen> {
           const Text(
             'Settlements will appear here once merchants\nrequest withdrawals',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color: AppTheme.textHint,
-            ),
+            style: TextStyle(fontSize: 13, color: AppTheme.textHint),
           ),
         ],
       ),
@@ -476,9 +466,7 @@ class _SettlementCard extends StatelessWidget {
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isSelected
-              ? AppTheme.primary
-              : AppTheme.divider,
+          color: isSelected ? AppTheme.primary : AppTheme.divider,
           width: isSelected ? 2 : 1,
         ),
         boxShadow: AppTheme.softShadow,
@@ -516,6 +504,7 @@ class _SettlementCard extends StatelessWidget {
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,
+                              color: AppTheme.textPrimary,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -652,6 +641,7 @@ class _TransferDetailsSheet extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
+                  color: AppTheme.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
@@ -679,10 +669,7 @@ class _TransferDetailsSheet extends StatelessWidget {
                   children: [
                     const Text(
                       'Amount to Transfer',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white70,
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.white70),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -706,6 +693,7 @@ class _TransferDetailsSheet extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -721,7 +709,10 @@ class _TransferDetailsSheet extends StatelessWidget {
                       if (url != null) {
                         final uri = Uri.parse(url);
                         if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
                         }
                       }
                     },
@@ -738,7 +729,10 @@ class _TransferDetailsSheet extends StatelessWidget {
                       if (url != null) {
                         final uri = Uri.parse(url);
                         if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          await launchUrl(
+                            uri,
+                            mode: LaunchMode.externalApplication,
+                          );
                         }
                       }
                     },
@@ -754,6 +748,7 @@ class _TransferDetailsSheet extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -765,10 +760,7 @@ class _TransferDetailsSheet extends StatelessWidget {
                   label: 'Account Number',
                   value: bank['accountNumber'] ?? 'N/A',
                 ),
-                _InfoRow(
-                  label: 'IFSC Code',
-                  value: bank['ifscCode'] ?? 'N/A',
-                ),
+                _InfoRow(label: 'IFSC Code', value: bank['ifscCode'] ?? 'N/A'),
                 _InfoRow(
                   label: 'Bank Name',
                   value: bank['bankName'] ?? 'N/A',
@@ -859,6 +851,7 @@ class _QuickPayButton extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -918,6 +911,7 @@ class _InfoRow extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
                 ),
                 textAlign: TextAlign.right,
               ),
@@ -959,10 +953,7 @@ class _UTREntryDialogState extends State<_UTREntryDialog> {
         children: [
           const Text(
             'Enter the bank transaction reference number (UTR) after completing the transfer.',
-            style: TextStyle(
-              fontSize: 13,
-              color: AppTheme.textSecondary,
-            ),
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -992,9 +983,7 @@ class _UTREntryDialogState extends State<_UTREntryDialog> {
               Navigator.pop(context, _controller.text.trim());
             }
           },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.primary,
-          ),
+          style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
           child: const Text('Confirm'),
         ),
       ],

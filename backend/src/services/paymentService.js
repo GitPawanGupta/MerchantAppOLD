@@ -265,6 +265,7 @@ const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = nul
 
   // paymentData is normalized from gateway adapter
   const internalStatus = paymentData.status || 'pending';
+  const wasAlreadySuccessful = transaction.status === 'success';
 
   transaction.status = internalStatus;
   transaction.cfPaymentId = paymentData.paymentId || transaction.cfPaymentId;
@@ -280,8 +281,8 @@ const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = nul
 
   await transaction.save();
 
-  // On success — update merchant totals and QR stats
-  if (internalStatus === 'success') {
+  // On success — update merchant totals and QR stats (ONLY if status changed to success)
+  if (internalStatus === 'success' && !wasAlreadySuccessful) {
     await Promise.all([
       Merchant.findByIdAndUpdate(transaction.merchantId, {
         $inc: {

@@ -182,7 +182,7 @@ const getMe = async (req, res, next) => {
     if (req.user.role === 'merchant') {
       const Merchant = require('../models/Merchant');
       const merchant = await Merchant.findOne({ userId: req.user._id }).select(
-        'merchantId businessName status kyc.status commissionRate totalCollected totalSettled pendingSettlement settlementPreference bankDetails bankAccounts isRazorpayLinked razorpayLinkedAccountId razorpayLinkedAt requiresReAuth'
+        'merchantId businessName status kyc.status commissionRate totalCollected totalSettled pendingSettlement bankDetails bankAccounts isRazorpayLinked razorpayLinkedAccountId razorpayLinkedAt requiresReAuth'
       );
       if (merchant) {
         const m = merchant.toObject();

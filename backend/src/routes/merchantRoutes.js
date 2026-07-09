@@ -94,8 +94,4 @@ router.post(
 router.post('/bank-accounts/:id/primary', merchantController.setPrimaryBankAccount);
 router.delete('/bank-accounts/:id', merchantController.deleteBankAccount);
 
-// Settlement preference
-router.get('/settlement-preference', merchantController.getSettlementPreference);
-router.post('/settlement-preference', merchantController.updateSettlementPreference);
-
 module.exports = router;

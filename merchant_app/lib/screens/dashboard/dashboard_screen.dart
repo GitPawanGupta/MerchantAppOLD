@@ -373,8 +373,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                             children: [
                               PendingCard(
                                 amount: merchant?.pendingSettlement ?? 0,
-                                preference:
-                                    merchant?.settlementPreference ?? 'instant',
                                 onSettle: () =>
                                     _handleManualSettlement(context),
                               ),
@@ -478,19 +476,12 @@ class _KycBadge extends StatelessWidget {
 // ── Pending settlement card ────────────────────────────────────────────────
 class PendingCard extends StatelessWidget {
   final double amount;
-  final String preference;
   final VoidCallback? onSettle;
 
-  const PendingCard({
-    super.key,
-    required this.amount,
-    required this.preference,
-    this.onSettle,
-  });
+  const PendingCard({super.key, required this.amount, this.onSettle});
 
   @override
   Widget build(BuildContext context) {
-    final isOnDemand = preference == 'on_demand';
     return GradientCard(
       gradient: AppTheme.accentGradient,
       child: Column(
@@ -532,47 +523,30 @@ class PendingCard extends StatelessWidget {
               ),
             ],
           ),
-          if (isOnDemand) ...[
-            const SizedBox(height: 16),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppTheme.accentDark,
-                elevation: 0,
-                minimumSize: const Size.fromHeight(46),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: onSettle,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.send_rounded, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    'Settle Now',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
-                ],
+          const SizedBox(height: 16),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: AppTheme.accentDark,
+              elevation: 0,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
-          ] else ...[
-            const SizedBox(height: 12),
-            Row(
+            onPressed: onSettle,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.autorenew, color: Colors.white70, size: 14),
-                const SizedBox(width: 6),
+                Icon(Icons.send_rounded, size: 18),
+                SizedBox(width: 8),
                 Text(
-                  'Auto-settlement enabled',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    fontSize: 12,
-                  ),
+                  'Request Settlement',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                 ),
               ],
             ),
-          ],
+          ),
         ],
       ),
     );

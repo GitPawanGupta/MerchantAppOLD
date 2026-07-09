@@ -237,34 +237,6 @@ const deleteBankAccount = async (req, res, next) => {
   }
 };
 
-/**
- * GET /api/merchant/settlement-preference
- */
-const getSettlementPreference = async (req, res, next) => {
-  try {
-    const preference = await merchantService.getSettlementPreference(req.merchant._id);
-    return successResponse(res, { settlementPreference: preference });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * POST /api/merchant/settlement-preference
- */
-const updateSettlementPreference = async (req, res, next) => {
-  try {
-    const { preference } = req.body;
-    if (!preference) {
-      return errorResponse(res, 'Preference is required', 400);
-    }
-    const updated = await merchantService.updateSettlementPreference(req.merchant._id, preference);
-    return successResponse(res, { settlementPreference: updated }, 'Settlement preference updated');
-  } catch (error) {
-    next(error);
-  }
-};
-
 module.exports = {
   updateProfileValidation,
   kycValidation,
@@ -281,6 +253,4 @@ module.exports = {
   addBankAccount,
   setPrimaryBankAccount,
   deleteBankAccount,
-  getSettlementPreference,
-  updateSettlementPreference,
 };

@@ -322,11 +322,10 @@ const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = nul
               },
             });
             logger.info(`Route transfer done for tx ${transaction.orderId}: ₹${transaction.settlementAmount} → ${merchant.razorpayLinkedAccountId}`);
+          } else {
+            // No linked account — use manual settlement queue
+            logger.info(`Merchant ${merchant.merchantId} not linked to Razorpay Partner — queuing for manual settlement`);
           }
-        } else if (merchant && merchant.settlementPreference === 'instant') {
-          // Fallback: no linked account — use manual settlement queue
-          logger.info(`Merchant ${merchant.merchantId} not linked to Razorpay Partner — queuing for manual settlement`);
-        }
       } catch (e) {
         logger.error(`Route transfer failed for tx ${transaction.orderId}: ${e.message}`);
       }

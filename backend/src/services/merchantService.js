@@ -403,27 +403,6 @@ const deleteBankAccount = async (merchantId, bankAccountId) => {
   return merchant.bankAccounts;
 };
 
-const getSettlementPreference = async (merchantId) => {
-  const merchant = await Merchant.findById(merchantId);
-  if (!merchant) throw new Error('Merchant not found');
-  return merchant.settlementPreference || 'instant';
-};
-
-const updateSettlementPreference = async (merchantId, preference) => {
-  const merchant = await Merchant.findById(merchantId);
-  if (!merchant) throw new Error('Merchant not found');
-
-  if (!['instant', 'on_demand'].includes(preference)) {
-    const error = new Error('Invalid settlement preference');
-    error.statusCode = 400;
-    throw error;
-  }
-
-  merchant.settlementPreference = preference;
-  await merchant.save();
-  return merchant.settlementPreference;
-};
-
 module.exports = {
   getProfile,
   updateProfile,
@@ -435,6 +414,4 @@ module.exports = {
   addBankAccount,
   setPrimaryBankAccount,
   deleteBankAccount,
-  getSettlementPreference,
-  updateSettlementPreference,
 };

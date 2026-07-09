@@ -132,11 +132,6 @@ const merchantSchema = new mongoose.Schema(
     kyc: { type: kycSchema, default: {} },
     bankDetails: { type: bankDetailsSchema },
     bankAccounts: [bankAccountSchema],
-    settlementPreference: {
-      type: String,
-      enum: ['instant', 'on_demand'],
-      default: 'instant',
-    },
 
     // Commission config (can override default)
     commissionRate: {

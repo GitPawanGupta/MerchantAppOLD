@@ -10,7 +10,6 @@ class MerchantModel {
   final double pendingSettlement;
   final BankDetails? bankDetails;
   final int bankAccountCount;
-  final String settlementPreference;
 
   // Razorpay Partner Technology
   final bool isRazorpayLinked;
@@ -29,7 +28,6 @@ class MerchantModel {
     this.pendingSettlement = 0,
     this.bankDetails,
     this.bankAccountCount = 0,
-    this.settlementPreference = 'instant',
     this.isRazorpayLinked = false,
     this.razorpayLinkedAccountId,
     this.razorpayLinkedAt,
@@ -54,7 +52,6 @@ class MerchantModel {
       if (j['bankDetails'] != null) return 1;
       return 0;
     }(),
-    settlementPreference: j['settlementPreference'] ?? 'instant',
     isRazorpayLinked: j['isRazorpayLinked'] ?? false,
     razorpayLinkedAccountId: j['razorpayLinkedAccountId'],
     razorpayLinkedAt: j['razorpayLinkedAt'],

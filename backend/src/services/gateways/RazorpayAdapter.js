@@ -84,13 +84,23 @@ class RazorpayAdapter extends IGatewayAdapter {
 
       logger.info(`Razorpay payment verified: ${paymentId}`);
 
+      // Map Razorpay status to internal status
+      let internalStatus = 'pending';
+      if (payment.status === 'captured' || payment.status === 'authorized') {
+        internalStatus = 'success';
+      } else if (payment.status === 'failed') {
+        internalStatus = 'failed';
+      } else if (payment.status === 'refunded') {
+        internalStatus = 'refunded';
+      }
+
       return {
         gateway: 'razorpay',
         isValid: true,
         paymentId: payment.id,
         orderId: payment.order_id,
         amount: payment.amount / 100,
-        status: payment.status,
+        status: internalStatus, // Use mapped internal status
         method: payment.method,
         bankTransactionId: payment.acquirer_data?.bank_transaction_id || payment.bank_transaction_id,
         vpa: payment.vpa,

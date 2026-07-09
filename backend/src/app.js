@@ -14,6 +14,9 @@ const logger = require('./utils/logger');
 
 const app = express();
 
+// ─── Trust Proxy (for Railway/Render deployments behind reverse proxy) ───────
+app.set('trust proxy', 1);
+
 // ─── Connect Database ─────────────────────────────────────────────────────────
 connectDB();
 

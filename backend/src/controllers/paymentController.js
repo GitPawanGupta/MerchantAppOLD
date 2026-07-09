@@ -56,8 +56,7 @@ const verifyPayment = async (req, res, next) => {
 const webhook = async (req, res, next) => {
   try {
     const rawBody = req.rawBody || JSON.stringify(req.body);
-    const signature = req.headers['x-razorpay-signature'];
-    const result = await paymentService.processWebhook(rawBody, signature, req.body);
+    const result = await paymentService.processWebhook(rawBody, req.headers, req.body);
     return res.status(200).json({ success: true, ...result });
   } catch (error) {
     logger.error(`Webhook error: ${error.message}`);

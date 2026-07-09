@@ -26,6 +26,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   String? _error;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
+  bool _hasPendingSettlement = false; // Track if settlement is pending
 
   @override
   void initState() {
@@ -58,6 +59,11 @@ class _DashboardScreenState extends State<DashboardScreen>
       _summary = data;
       final txList = data['recentTransactions'] as List? ?? [];
       _recentTx = txList.map((e) => TransactionModel.fromJson(e)).toList();
+
+      // Extract hasPendingSettlement flag from summary
+      final summary = data['summary'] as Map<String, dynamic>? ?? {};
+      _hasPendingSettlement = summary['hasPendingSettlement'] as bool? ?? false;
+
       _fadeCtrl.forward();
     } on ApiException catch (e) {
       _error = e.message;
@@ -201,8 +207,82 @@ class _DashboardScreenState extends State<DashboardScreen>
       });
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Settlement initiated successfully!')),
+        // Show success message with 24hr timeline
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.check_circle,
+                    color: Colors.green,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Settlement Requested',
+                    style: TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Your settlement request has been submitted successfully!',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.info.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.info.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.schedule, color: AppTheme.info, size: 20),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Amount will be credited to your bank account within 24 hours.',
+                          style: TextStyle(fontSize: 13, height: 1.4),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  minimumSize: const Size.fromHeight(44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('Got it'),
+              ),
+            ],
+          ),
         );
         _load();
         auth.refreshProfile();
@@ -373,6 +453,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                             children: [
                               PendingCard(
                                 amount: merchant?.pendingSettlement ?? 0,
+                                hasPendingSettlement: _hasPendingSettlement,
                                 onSettle: () =>
                                     _handleManualSettlement(context),
                               ),
@@ -476,12 +557,22 @@ class _KycBadge extends StatelessWidget {
 // ── Pending settlement card ────────────────────────────────────────────────
 class PendingCard extends StatelessWidget {
   final double amount;
+  final bool hasPendingSettlement;
   final VoidCallback? onSettle;
 
-  const PendingCard({super.key, required this.amount, this.onSettle});
+  const PendingCard({
+    super.key,
+    required this.amount,
+    required this.hasPendingSettlement,
+    this.onSettle,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Show ₹0 if settlement is pending, otherwise show actual amount
+    final displayAmount = hasPendingSettlement ? 0.0 : amount;
+    final isButtonEnabled = !hasPendingSettlement && amount >= 1;
+
     return GradientCard(
       gradient: AppTheme.accentGradient,
       child: Column(
@@ -492,13 +583,42 @@ class PendingCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Pending Settlement',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
+                  Row(
+                    children: [
+                      const Text(
+                        'Pending Settlement',
+                        style: TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                      if (hasPendingSettlement) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: Colors.orange.withOpacity(0.5),
+                            ),
+                          ),
+                          child: const Text(
+                            'PROCESSING',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 6),
                   AnimatedCounter(
-                    value: amount,
+                    value: displayAmount,
                     formatter: formatCurrency,
                     style: const TextStyle(
                       color: Colors.white,
@@ -507,6 +627,26 @@ class PendingCard extends StatelessWidget {
                       letterSpacing: -0.5,
                     ),
                   ),
+                  if (hasPendingSettlement) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          color: Colors.white.withOpacity(0.7),
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Settlement in progress',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
               Container(
@@ -515,8 +655,10 @@ class PendingCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(
-                  Icons.account_balance_wallet_outlined,
+                child: Icon(
+                  hasPendingSettlement
+                      ? Icons.hourglass_bottom
+                      : Icons.account_balance_wallet_outlined,
                   color: Colors.white,
                   size: 28,
                 ),
@@ -524,27 +666,48 @@ class PendingCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: AppTheme.accentDark,
-              elevation: 0,
-              minimumSize: const Size.fromHeight(46),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: onSettle,
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.send_rounded, size: 18),
-                SizedBox(width: 8),
-                Text(
-                  'Request Settlement',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+          Tooltip(
+            message: isButtonEnabled
+                ? ''
+                : hasPendingSettlement
+                ? 'Settlement request is being processed'
+                : 'Minimum settlement amount is ₹1',
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isButtonEnabled
+                    ? Colors.white
+                    : Colors.white.withOpacity(0.3),
+                foregroundColor: isButtonEnabled
+                    ? AppTheme.accentDark
+                    : Colors.white.withOpacity(0.5),
+                elevation: 0,
+                minimumSize: const Size.fromHeight(46),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
+              ),
+              onPressed: isButtonEnabled ? onSettle : null,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isButtonEnabled ? Icons.send_rounded : Icons.lock_outline,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    isButtonEnabled
+                        ? 'Request Settlement'
+                        : hasPendingSettlement
+                        ? 'Settlement Requested'
+                        : 'Request Settlement',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

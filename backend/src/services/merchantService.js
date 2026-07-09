@@ -219,7 +219,7 @@ const getDashboardSummary = async (merchantId) => {
   chartStart.setDate(chartStart.getDate() - 6);
   chartStart.setHours(0, 0, 0, 0);
 
-  const [todayTx, recentTx, recentSettlements, chartTx] = await Promise.all([
+  const [todayTx, recentTx, recentSettlements, chartTx, pendingSettlementCount] = await Promise.all([
     Transaction.aggregate([
       {
         $match: {
@@ -262,6 +262,11 @@ const getDashboardSummary = async (merchantId) => {
         },
       },
     ]),
+    // Check for pending settlements
+    Settlement.countDocuments({
+      merchantId: merchant._id,
+      status: 'pending',
+    }),
   ]);
 
   const last7Days = [];
@@ -296,6 +301,7 @@ const getDashboardSummary = async (merchantId) => {
       totalCollected:    merchant.totalCollected,
       totalSettled:      merchant.totalSettled,
       pendingSettlement: merchant.pendingSettlement,
+      hasPendingSettlement: pendingSettlementCount > 0,
     },
     today: todayTx[0]
       ? {

@@ -137,81 +137,304 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
 
   // ── Set per-merchant commission ───────────────────────────────────────────
   Future<void> _setMerchantRate() async {
-    final merchantIdCtrl = TextEditingController();
+    // Show loading dialog while fetching merchants
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    List<dynamic> merchants = [];
+    try {
+      final res = await ApiService.get('/admin/merchants?limit=1000');
+      merchants = res['data'] as List? ?? [];
+      if (mounted) Navigator.pop(context); // Close loading dialog
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        _showSnack('Failed to load merchants');
+      }
+      return;
+    }
+
+    if (merchants.isEmpty) {
+      _showSnack('No merchants found');
+      return;
+    }
+
+    if (!mounted) return;
+
+    // State variables for the dialog
+    Map<String, dynamic>? selectedMerchant;
     final rateCtrl = TextEditingController();
     final descCtrl = TextEditingController();
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Set Merchant Commission'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Override the commission rate for a specific merchant. '
-                'This takes priority over the global rate.',
-                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: merchantIdCtrl,
-                style: const TextStyle(color: Color(0xFF0F172A)),
-                decoration: const InputDecoration(
-                  labelText: 'Merchant ID (e.g. MER000001)',
-                  prefixIcon: Icon(Icons.store_outlined, size: 18),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (_, setDialogState) => AlertDialog(
+          title: const Text('Set Merchant Commission'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Override the commission rate for a specific merchant. '
+                  'This takes priority over the global rate.',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                 ),
-                textCapitalization: TextCapitalization.characters,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: rateCtrl,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+                const SizedBox(height: 16),
+
+                // Merchant Dropdown Selector
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppTheme.textHint),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<Map<String, dynamic>>(
+                      value: selectedMerchant,
+                      hint: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.store_outlined,
+                              size: 18,
+                              color: AppTheme.textSecondary,
+                            ),
+                            SizedBox(width: 12),
+                            Text(
+                              'Select Merchant',
+                              style: TextStyle(color: AppTheme.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      isExpanded: true,
+                      icon: const Padding(
+                        padding: EdgeInsets.only(right: 12),
+                        child: Icon(Icons.arrow_drop_down),
+                      ),
+                      items: merchants.map((merchant) {
+                        final merchantId = merchant['merchantId'] ?? '';
+                        final businessName =
+                            merchant['businessName'] ?? 'Unknown';
+                        final status = merchant['status'] ?? '';
+                        final kycStatus =
+                            merchant['kyc']?['status'] ??
+                            merchant['kycStatus'] ??
+                            '';
+
+                        return DropdownMenuItem<Map<String, dynamic>>(
+                          value: merchant,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        businessName,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (status == 'active')
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.accent.withOpacity(
+                                            0.1,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'ACTIVE',
+                                          style: TextStyle(
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.accent,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Text(
+                                      merchantId,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.textSecondary,
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                    if (kycStatus == 'approved') ...[
+                                      const SizedBox(width: 6),
+                                      const Icon(
+                                        Icons.verified,
+                                        size: 12,
+                                        color: AppTheme.accent,
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (merchant) {
+                        setDialogState(() {
+                          selectedMerchant = merchant;
+                        });
+                      },
+                    ),
+                  ),
                 ),
-                style: const TextStyle(color: Color(0xFF0F172A)),
-                decoration: const InputDecoration(
-                  labelText: 'Commission Rate (%)',
-                  suffixText: '%',
-                  prefixIcon: Icon(Icons.percent, size: 18),
+
+                if (selectedMerchant != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppTheme.primary.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Selected Merchant Info:',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.business,
+                              size: 14,
+                              color: AppTheme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                selectedMerchant!['businessName'] ?? '',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.tag,
+                              size: 14,
+                              color: AppTheme.primary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              selectedMerchant!['merchantId'] ?? '',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontFamily: 'monospace',
+                                color: AppTheme.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 12),
+                TextField(
+                  controller: rateCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: const InputDecoration(
+                    labelText: 'Commission Rate (%)',
+                    suffixText: '%',
+                    prefixIcon: Icon(Icons.percent, size: 18),
+                    hintText: 'e.g. 2.5',
+                  ),
+                  autofocus: false,
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descCtrl,
-                style: const TextStyle(color: Color(0xFF0F172A)),
-                decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
-                  prefixIcon: Icon(Icons.notes, size: 18),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: descCtrl,
+                  style: const TextStyle(color: Color(0xFF0F172A)),
+                  decoration: const InputDecoration(
+                    labelText: 'Description (optional)',
+                    prefixIcon: Icon(Icons.notes, size: 18),
+                    hintText: 'e.g. Special rate for premium merchant',
+                  ),
+                  maxLines: 2,
                 ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              minimumSize: Size.zero,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              ],
             ),
-            child: const Text('Save'),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: selectedMerchant == null
+                  ? null
+                  : () => Navigator.pop(dialogContext, true),
+              style: ElevatedButton.styleFrom(
+                minimumSize: Size.zero,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
 
-    if (confirmed != true) return;
-    final merchantId = merchantIdCtrl.text.trim();
+    if (confirmed != true || selectedMerchant == null) return;
+
+    final merchantId = selectedMerchant['merchantId'] as String? ?? '';
     final rate = double.tryParse(rateCtrl.text.trim());
 
     if (merchantId.isEmpty) {
-      _showSnack('Merchant ID required');
+      _showSnack('Please select a merchant');
       return;
     }
     if (rate == null || rate < 0 || rate > 100) {
@@ -225,7 +448,9 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
         if (descCtrl.text.trim().isNotEmpty)
           'description': descCtrl.text.trim(),
       });
-      _showSnack('Commission for $merchantId set to $rate%');
+      _showSnack(
+        'Commission for ${selectedMerchant['businessName']} set to $rate%',
+      );
       _load();
     } on ApiException catch (e) {
       _showSnack(e.message);

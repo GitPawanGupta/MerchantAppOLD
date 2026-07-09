@@ -457,6 +457,7 @@ const updateTransactionStatus = async (req, res, next) => {
         $inc: { 
           totalRevenue: tx.amount,
           availableBalance: tx.settlementAmount,
+          pendingSettlement: tx.settlementAmount,  // Add to pending settlement
           totalCommission: tx.commissionAmount
         },
         lastTransactionDate: new Date(),

@@ -220,7 +220,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -250,9 +250,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppTheme.info.withOpacity(0.1),
+                    color: AppTheme.info.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppTheme.info.withOpacity(0.3)),
+                    border: Border.all(
+                      color: AppTheme.info.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -597,10 +599,10 @@ class PendingCard extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.orange.withOpacity(0.3),
+                            color: Colors.orange.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                              color: Colors.orange.withOpacity(0.5),
+                              color: Colors.orange.withValues(alpha: 0.5),
                             ),
                           ),
                           child: const Text(
@@ -633,14 +635,14 @@ class PendingCard extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.schedule,
-                          color: Colors.white.withOpacity(0.7),
+                          color: Colors.white.withValues(alpha: 0.7),
                           size: 12,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           'Settlement in progress',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
+                            color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 11,
                           ),
                         ),
@@ -676,10 +678,10 @@ class PendingCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: isButtonEnabled
                     ? Colors.white
-                    : Colors.white.withOpacity(0.3),
+                    : Colors.white.withValues(alpha: 0.3),
                 foregroundColor: isButtonEnabled
                     ? AppTheme.accentDark
-                    : Colors.white.withOpacity(0.5),
+                    : Colors.white.withValues(alpha: 0.5),
                 elevation: 0,
                 minimumSize: const Size.fromHeight(46),
                 shape: RoundedRectangleBorder(

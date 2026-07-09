@@ -102,8 +102,9 @@ class _SettlementRequestSheetState extends State<SettlementRequestSheet> {
     } on ApiException catch (e) {
       if (mounted) _showError(e.message);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         _showError('Failed to request settlement. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

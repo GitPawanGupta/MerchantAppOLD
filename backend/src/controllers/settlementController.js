@@ -1,15 +1,14 @@
 const settlementService = require('../services/settlementService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 const { getPaginationParams, buildPaginationMeta } = require('../utils/helpers');
-const logger = require('../utils/logger');
 
 /**
  * GET /api/settlement
- * Merchant — list own settlements
+ * Merchant — list own settlements (paginated, optional ?status= filter)
  */
 const listSettlements = async (req, res, next) => {
   try {
-    const { page, limit, skip } = getPaginationParams(req.query);
+    const { page, limit } = getPaginationParams(req.query);
     const { status } = req.query;
 
     const { settlements, total } = await settlementService.getMerchantSettlements(
@@ -30,7 +29,7 @@ const listSettlements = async (req, res, next) => {
 
 /**
  * GET /api/settlement/:settlementRef
- * Merchant — get a single settlement detail
+ * Merchant — get a single settlement with its transactions
  */
 const getSettlementDetail = async (req, res, next) => {
   try {
@@ -45,26 +44,15 @@ const getSettlementDetail = async (req, res, next) => {
 };
 
 /**
- * POST /api/settlement/payout-webhook
- * Cashfree Payout webhook — no auth, verified by payload structure
- */
-const payoutWebhook = async (req, res, next) => {
-  try {
-    const result = await settlementService.processPayoutWebhook(req.body);
-    return res.status(200).json({ success: true, ...result });
-  } catch (error) {
-    logger.error(`Payout webhook error: ${error.message}`);
-    return res.status(200).json({ success: false, message: error.message });
-  }
-};
-
-/**
  * POST /api/settlement/request
- * Merchant — request settlement to a specific bank account
+ * Merchant — request an on-demand settlement to a saved bank account.
+ * No external payout API is called; the record is created with status=pending
+ * and settled via Razorpay Route (already ran at payment time) or admin action.
  */
 const requestSettlement = async (req, res, next) => {
   try {
     const { bankAccountId } = req.body;
+
     if (!bankAccountId) {
       return errorResponse(res, 'bankAccountId is required', 400);
     }
@@ -83,7 +71,11 @@ const requestSettlement = async (req, res, next) => {
     );
 
     if (!settlement) {
-      return errorResponse(res, 'No unsettled transactions or amount below minimum threshold (₹100)', 400);
+      return errorResponse(
+        res,
+        'No unsettled transactions or amount below minimum threshold (₹100)',
+        400
+      );
     }
 
     return successResponse(
@@ -93,8 +85,12 @@ const requestSettlement = async (req, res, next) => {
         netAmount: settlement.netAmount,
         status: settlement.status,
         transactionCount: settlement.transactionCount,
+        bankName: settlement.bankName,
+        bankAccountNumber: settlement.bankAccountNumber
+          ? `****${settlement.bankAccountNumber.slice(-4)}`
+          : undefined,
       },
-      'Settlement initiated successfully'
+      'Settlement request recorded successfully'
     );
   } catch (error) {
     next(error);
@@ -104,6 +100,5 @@ const requestSettlement = async (req, res, next) => {
 module.exports = {
   listSettlements,
   getSettlementDetail,
-  payoutWebhook,
   requestSettlement,
 };

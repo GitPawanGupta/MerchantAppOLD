@@ -44,7 +44,7 @@ async function main() {
   const token = login.b.data?.accessToken;
   console.log('[1] Login:', token ? '✅' : '❌');
 
-  // 2. Create QR — will use upiVpa if set
+  // 2. Create QR — always uses web URL (Razorpay checkout) for commission tracking
   const qr = await req('POST', '/api/qr/static', { label: 'Deploy Test' }, token);
   const url = qr.b.data?.paymentUrl;
   const qrId = qr.b.data?.qrId;

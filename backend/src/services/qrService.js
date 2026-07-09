@@ -5,37 +5,29 @@ const Merchant = require('../models/Merchant');
 const { generateOrderId } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
-// Production backend URL — using custom domain (Razorpay approved)
-const CORRECT_BACKEND_URL = 'https://app.pasuai.online';
+// Backend base URL (Razorpay-approved custom domain)
+const BACKEND_URL = process.env.BACKEND_URL || 'https://app.pasuai.online';
 
 /**
- * Build the UPI deep link that gets embedded inside the QR.
- * Using UPI deep link means PhonePe/GPay/Paytm will open directly
- * without any "You are leaving" warning popup.
- * Falls back to web URL if merchant has no UPI VPA.
+ * Build the web URL that gets embedded in the QR image.
+ *
+ * We always use the web URL — never a UPI deep link — so that:
+ *   1. Every payment goes through Razorpay checkout on our platform.
+ *   2. Commission is calculated and deducted on every transaction.
+ *   3. We have a full transaction record for settlement and reporting.
+ *
+ * A UPI deep link (upi://pay?pa=VPA) would let customers pay the merchant
+ * directly, completely bypassing our platform, commission, and settlement.
  */
-const buildPaymentUrl = (qrId, amount = null, upiVpa = null, merchantName = null) => {
-  // If merchant has UPI VPA, embed UPI deep link — no browser redirect, no warnings
-  if (upiVpa) {
-    const params = new URLSearchParams({
-      pa: upiVpa,
-      pn: merchantName || 'Merchant',
-      cu: 'INR',
-      tn: 'Payment via ISS',
-    });
-    if (amount) params.append('am', amount.toString());
-    return `upi://pay?${params.toString()}`;
-  }
-
-  // Fallback: web URL (for QRs without UPI VPA)
-  const base = `${CORRECT_BACKEND_URL}/api/payment/pay`;
+const buildPaymentUrl = (qrId, amount = null) => {
   const params = new URLSearchParams({ qrId });
-  if (amount) params.append('amount', amount);
-  return `${base}?${params.toString()}`;
+  if (amount) params.append('amount', amount.toString());
+  return `${BACKEND_URL}/api/payment/pay?${params.toString()}`;
 };
 
 /**
- * Generate QR code PNG as base64 string
+ * Generate a QR code PNG as a base64 data URL.
+ * Called on-the-fly — result is NOT stored in MongoDB.
  */
 const generateQRImage = async (data) => {
   return QRCode.toDataURL(data, {
@@ -47,9 +39,11 @@ const generateQRImage = async (data) => {
   });
 };
 
+// ─── Create QR Codes ──────────────────────────────────────────────────────────
+
 /**
- * Create a static QR code for a merchant
- * Static = reusable, any amount, doesn't expire
+ * Create a static QR for a merchant.
+ * Static = reusable, accepts any amount, never expires.
  */
 const createStaticQR = async (merchantId, label = 'Payment QR') => {
   const merchant = await Merchant.findById(merchantId);
@@ -58,7 +52,6 @@ const createStaticQR = async (merchantId, label = 'Payment QR') => {
     err.statusCode = 404;
     throw err;
   }
-
   if (merchant.status !== 'active') {
     const err = new Error('Merchant account must be active to generate QR codes');
     err.statusCode = 400;
@@ -66,9 +59,7 @@ const createStaticQR = async (merchantId, label = 'Payment QR') => {
   }
 
   const qrId = `QR_${uuidv4().replace(/-/g, '').substring(0, 16).toUpperCase()}`;
-  const upiVpa = merchant.bankDetails?.upiVpa || null;
-  const paymentUrl = buildPaymentUrl(qrId, null, upiVpa, merchant.businessName);
-  const qrImageBase64 = await generateQRImage(paymentUrl);
+  const paymentUrl = buildPaymentUrl(qrId);
 
   const qr = await QRCodeModel.create({
     merchantId,
@@ -76,7 +67,6 @@ const createStaticQR = async (merchantId, label = 'Payment QR') => {
     type: 'static',
     label,
     paymentUrl,
-    qrImageBase64,
     isActive: true,
   });
 
@@ -85,7 +75,8 @@ const createStaticQR = async (merchantId, label = 'Payment QR') => {
 };
 
 /**
- * Create a dynamic QR code — tied to a specific amount/order, can expire
+ * Create a dynamic QR for a specific amount.
+ * Dynamic = fixed amount, expires after `expiresInMinutes` (default 30 min).
  */
 const createDynamicQR = async (merchantId, { amount, label, expiresInMinutes = 30 }) => {
   const merchant = await Merchant.findById(merchantId);
@@ -94,13 +85,11 @@ const createDynamicQR = async (merchantId, { amount, label, expiresInMinutes = 3
     err.statusCode = 404;
     throw err;
   }
-
   if (merchant.status !== 'active') {
     const err = new Error('Merchant account must be active to generate QR codes');
     err.statusCode = 400;
     throw err;
   }
-
   if (!amount || amount < 1) {
     const err = new Error('Amount must be at least ₹1 for dynamic QR');
     err.statusCode = 400;
@@ -109,10 +98,7 @@ const createDynamicQR = async (merchantId, { amount, label, expiresInMinutes = 3
 
   const qrId = `DQR_${uuidv4().replace(/-/g, '').substring(0, 14).toUpperCase()}`;
   const orderId = generateOrderId('DYN');
-  const upiVpa = merchant.bankDetails?.upiVpa || null;
-  const paymentUrl = buildPaymentUrl(qrId, amount, upiVpa, merchant.businessName);
-  const qrImageBase64 = await generateQRImage(paymentUrl);
-
+  const paymentUrl = buildPaymentUrl(qrId, amount);
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
 
   const qr = await QRCodeModel.create({
@@ -122,35 +108,41 @@ const createDynamicQR = async (merchantId, { amount, label, expiresInMinutes = 3
     fixedAmount: amount,
     label: label || `Pay ₹${amount}`,
     paymentUrl,
-    qrImageBase64,
     isActive: true,
     expiresAt,
     orderId,
   });
 
-  logger.info(`Dynamic QR created for merchant ${merchant.merchantId}: ${qrId}, amount: ${amount}`);
+  logger.info(`Dynamic QR created for merchant ${merchant.merchantId}: ${qrId}, ₹${amount}, expires: ${expiresAt.toISOString()}`);
   return qr;
 };
 
+// ─── Query QR Codes ───────────────────────────────────────────────────────────
+
 /**
- * Get all QR codes for a merchant
+ * List all QR codes for a merchant.
+ * Does NOT include generated image — fetch separately via getQRImage().
  */
 const getMerchantQRCodes = async (merchantId, { type, isActive } = {}) => {
   const filter = { merchantId };
   if (type) filter.type = type;
   if (isActive !== undefined) filter.isActive = isActive === 'true' || isActive === true;
 
-  const qrCodes = await QRCodeModel.find(filter)
-    .select('-qrImageBase64') // exclude heavy base64 in list view
-    .sort({ createdAt: -1 });
-
-  return qrCodes;
+  return QRCodeModel.find(filter).sort({ createdAt: -1 });
 };
 
 /**
- * Get a single QR code by qrId (public — used when scanning)
+ * Look up a QR by qrId — used when a customer scans.
+ *
+ * Expiry is handled here in application code (NOT via MongoDB TTL index) so we
+ * can return a meaningful 410 "expired" response instead of a silent 404 that
+ * would occur if the TTL index had already deleted the document.
+ *
+ * scanCount is incremented atomically in the same findOneAndUpdate call that
+ * marks an expired QR inactive, eliminating the previous double-write pattern.
  */
 const getQRByQrId = async (qrId) => {
+  // Fetch the QR; we'll decide what to update based on its state
   const qr = await QRCodeModel.findOne({ qrId }).populate(
     'merchantId',
     'merchantId businessName businessCategory logo status'
@@ -162,10 +154,14 @@ const getQRByQrId = async (qrId) => {
     throw err;
   }
 
-  // Check expiry for dynamic QR
-  if (qr.expiresAt && new Date() > qr.expiresAt) {
-    qr.isActive = false;
-    await qr.save();
+  // Check expiry (dynamic QR only)
+  const isExpired = qr.expiresAt && new Date() > qr.expiresAt;
+
+  if (isExpired) {
+    // Mark inactive atomically if not already done
+    if (qr.isActive) {
+      await QRCodeModel.findByIdAndUpdate(qr._id, { isActive: false });
+    }
     const err = new Error('This QR code has expired');
     err.statusCode = 410;
     throw err;
@@ -177,14 +173,16 @@ const getQRByQrId = async (qrId) => {
     throw err;
   }
 
-  // Increment scan counter
+  // Single atomic write: increment scanCount only (no separate save() needed)
   await QRCodeModel.findByIdAndUpdate(qr._id, { $inc: { scanCount: 1 } });
 
   return qr;
 };
 
 /**
- * Get QR image (base64) for download
+ * Generate QR image PNG on-the-fly for a merchant's QR code.
+ * Image is NOT cached in DB — generated fresh each request.
+ * For production scale, add a CDN layer in front of this endpoint.
  */
 const getQRImage = async (qrId, merchantId) => {
   const qr = await QRCodeModel.findOne({ qrId, merchantId });
@@ -193,11 +191,14 @@ const getQRImage = async (qrId, merchantId) => {
     err.statusCode = 404;
     throw err;
   }
-  return qr.qrImageBase64;
+  // Generate PNG as base64 data URL fresh each time
+  return generateQRImage(qr.paymentUrl);
 };
 
+// ─── Manage QR Codes ──────────────────────────────────────────────────────────
+
 /**
- * Deactivate a QR code
+ * Deactivate a QR code (soft delete — keeps record and stats)
  */
 const deactivateQR = async (qrId, merchantId) => {
   const qr = await QRCodeModel.findOneAndUpdate(
@@ -214,7 +215,7 @@ const deactivateQR = async (qrId, merchantId) => {
 };
 
 /**
- * Delete a QR code
+ * Hard delete a QR code and its stats
  */
 const deleteQR = async (qrId, merchantId) => {
   const qr = await QRCodeModel.findOneAndDelete({ qrId, merchantId });

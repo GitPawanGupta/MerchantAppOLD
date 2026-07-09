@@ -10,7 +10,7 @@ const settlementSchema = new mongoose.Schema(
     merchantId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Merchant',
-      required: false,
+      required: false, // null for admin commission settlements
     },
     isAdminSettlement: {
       type: Boolean,
@@ -21,10 +21,10 @@ const settlementSchema = new mongoose.Schema(
       ref: 'User',
     },
 
-    // Amount details
+    // Amount breakdown
     grossAmount: {
       type: Number,
-      required: true, // Total transaction amount
+      required: true, // Total transaction amount before commission
     },
     totalCommission: {
       type: Number,
@@ -32,7 +32,7 @@ const settlementSchema = new mongoose.Schema(
     },
     netAmount: {
       type: Number,
-      required: true, // Amount transferred to merchant
+      required: true, // Amount transferred to merchant/admin
     },
 
     // Transactions included in this settlement
@@ -47,19 +47,15 @@ const settlementSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // Bank/Payout details at time of settlement
+    // Bank details snapshot at time of settlement
     bankAccountNumber: { type: String },
-    bankIfsc: { type: String },
-    bankName: { type: String },
+    bankIfsc:          { type: String },
+    bankName:          { type: String },
     accountHolderName: { type: String },
 
-    // Cashfree Payout details
-    payoutTransferId: {
-      type: String, // Cashfree transfer ID
-    },
-    payoutReferenceId: {
-      type: String, // Bank UTR / reference
-    },
+    // Payout reference (UTR / bank reference — filled after manual transfer)
+    payoutTransferId:  { type: String }, // External transfer/UTR reference
+    payoutReferenceId: { type: String }, // Bank UTR reference number
     payoutMode: {
       type: String,
       enum: ['IMPS', 'NEFT', 'RTGS', 'UPI', 'unknown'],
@@ -74,25 +70,25 @@ const settlementSchema = new mongoose.Schema(
     },
     failureReason: { type: String },
 
-    // Scheduling
-    scheduledAt: { type: Date },
-    initiatedAt: { type: Date },
-    completedAt: { type: Date },
+    // Timestamps
+    scheduledAt:  { type: Date },
+    initiatedAt:  { type: Date },
+    completedAt:  { type: Date },
 
-    // Type
+    // Type of settlement
     type: {
       type: String,
       enum: ['instant', 'scheduled', 'manual'],
       default: 'instant',
     },
 
-    // Initiated by (for manual settlements)
+    // Who triggered this settlement (for manual/admin settlements)
     initiatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
     },
 
-    // Raw Cashfree response
+    // Raw gateway response (for audit trail)
     payoutResponse: {
       type: mongoose.Schema.Types.Mixed,
     },
@@ -102,7 +98,7 @@ const settlementSchema = new mongoose.Schema(
   }
 );
 
-// ─── Indexes ─────────────────────────────────────────────────────────────────
+// ─── Indexes ──────────────────────────────────────────────────────────────────
 // settlementRef already indexed via unique:true in schema definition
 settlementSchema.index({ merchantId: 1, createdAt: -1 });
 settlementSchema.index({ status: 1 });

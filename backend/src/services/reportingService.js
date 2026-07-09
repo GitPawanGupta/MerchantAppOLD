@@ -322,7 +322,7 @@ const getAdminTransactionReport = async ({ period, startDate, endDate, merchantI
       {
         $lookup: { from: 'merchants', localField: '_id', foreignField: '_id', as: 'merchant' },
       },
-      { $unwind: { path: '$merchant', preserveNullAndEmpty: true } },
+      { $unwind: { path: '$merchant', preserveNullAndEmptyArrays: true } },
       {
         $project: {
           merchantId: '$merchant.merchantId',
@@ -401,7 +401,7 @@ const getAdminCommissionReport = async ({ period, startDate, endDate } = {}) => 
       { $sort: { commission: -1 } },
       { $limit: 20 },
       { $lookup: { from: 'merchants', localField: '_id', foreignField: '_id', as: 'merchant' } },
-      { $unwind: { path: '$merchant', preserveNullAndEmpty: true } },
+      { $unwind: { path: '$merchant', preserveNullAndEmptyArrays: true } },
       {
         $project: {
           merchantId: '$merchant.merchantId',

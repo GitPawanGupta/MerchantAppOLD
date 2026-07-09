@@ -1,4 +1,4 @@
-const { body, query } = require('express-validator');
+const { body } = require('express-validator');
 const qrService = require('../services/qrService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 
@@ -22,7 +22,7 @@ const dynamicQRValidation = [
 
 /**
  * POST /api/qr/static
- * Create a static QR for the logged-in merchant
+ * Create a reusable static QR (any amount, never expires)
  */
 const createStaticQR = async (req, res, next) => {
   try {
@@ -35,7 +35,7 @@ const createStaticQR = async (req, res, next) => {
 
 /**
  * POST /api/qr/dynamic
- * Create a dynamic QR for a specific amount
+ * Create a dynamic QR tied to a specific amount (expires after set minutes)
  */
 const createDynamicQR = async (req, res, next) => {
   try {
@@ -53,7 +53,7 @@ const createDynamicQR = async (req, res, next) => {
 
 /**
  * GET /api/qr
- * List all QR codes for the merchant
+ * List all QR codes for the merchant (no image data — fetch separately)
  */
 const listQRCodes = async (req, res, next) => {
   try {
@@ -66,15 +66,19 @@ const listQRCodes = async (req, res, next) => {
 
 /**
  * GET /api/qr/:qrId/image
- * Get QR image as base64 (for download / display)
+ * Generate and stream QR image as PNG.
+ * Image is generated on-the-fly from the stored paymentUrl — not from DB.
+ * Add CDN caching in front of this for production scale.
  */
 const getQRImage = async (req, res, next) => {
   try {
-    const base64 = await qrService.getQRImage(req.params.qrId, req.merchant._id);
-    // Return as PNG binary
-    const imgBuffer = Buffer.from(base64.split(',')[1], 'base64');
+    const base64DataUrl = await qrService.getQRImage(req.params.qrId, req.merchant._id);
+    // Strip "data:image/png;base64," prefix and decode to binary
+    const base64Data = base64DataUrl.split(',')[1];
+    const imgBuffer = Buffer.from(base64Data, 'base64');
     res.set('Content-Type', 'image/png');
     res.set('Content-Disposition', `attachment; filename="qr_${req.params.qrId}.png"`);
+    res.set('Cache-Control', 'public, max-age=3600'); // 1 hour client-side cache
     return res.send(imgBuffer);
   } catch (error) {
     next(error);
@@ -107,19 +111,19 @@ const deleteQR = async (req, res, next) => {
 
 /**
  * GET /api/qr/scan/:qrId  (PUBLIC — called when customer scans)
- * Returns merchant info + payment details without auth
+ * Returns merchant info and QR metadata. No auth required.
+ * Handles expired QRs with a proper 410 response (not 404).
  */
 const scanQR = async (req, res, next) => {
   try {
     const qr = await qrService.getQRByQrId(req.params.qrId);
     return successResponse(res, {
-      qrId: qr.qrId,
-      type: qr.type,
+      qrId:        qr.qrId,
+      type:        qr.type,
       fixedAmount: qr.fixedAmount,
-      label: qr.label,
-      merchant: qr.merchantId,
-      paymentUrl: qr.paymentUrl,
-      expiresAt: qr.expiresAt,
+      label:       qr.label,
+      merchant:    qr.merchantId,   // populated: businessName, logo, status
+      expiresAt:   qr.expiresAt,
     });
   } catch (error) {
     next(error);

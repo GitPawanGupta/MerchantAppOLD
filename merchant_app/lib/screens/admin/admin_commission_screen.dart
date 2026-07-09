@@ -9,7 +9,10 @@ class AdminCommissionScreen extends StatefulWidget {
   State<AdminCommissionScreen> createState() => _AdminCommissionScreenState();
 }
 
-class _AdminCommissionScreenState extends State<AdminCommissionScreen> {
+class _AdminCommissionScreenState extends State<AdminCommissionScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
   List<dynamic> _configs = [];
   double _globalRate = 2.0;
   bool _loading = true;
@@ -18,7 +21,14 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {

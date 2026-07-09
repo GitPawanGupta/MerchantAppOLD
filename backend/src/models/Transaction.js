@@ -18,19 +18,20 @@ const transactionSchema = new mongoose.Schema(
       ref: 'QRCode',
     },
 
-    // Cashfree IDs
+    // Razorpay IDs
+    // Note: field names kept as cfOrderId/cfPaymentId for DB backward compatibility
     cfOrderId: {
-      type: String, // Cashfree's order ID
+      type: String, // Razorpay order ID (rzp_order_XXXX)
     },
     cfPaymentId: {
-      type: String, // Cashfree's payment ID
+      type: String, // Razorpay payment ID (pay_XXXX)
     },
     cfReferenceId: {
-      type: String, // Bank reference number
+      type: String, // Bank UTR / reference number
     },
 
     // Customer details
-    customerName: { type: String, trim: true },
+    customerName:  { type: String, trim: true },
     customerEmail: { type: String, trim: true, lowercase: true },
     customerPhone: { type: String, trim: true },
 
@@ -63,12 +64,8 @@ const transactionSchema = new mongoose.Schema(
       enum: ['upi', 'card', 'netbanking', 'wallet', 'emi', 'unknown'],
       default: 'unknown',
     },
-    paymentInstrument: {
-      type: String, // e.g. "UPI", "VISA", "SBI"
-    },
-    upiTransactionId: {
-      type: String,
-    },
+    paymentInstrument: { type: String }, // e.g. "UPI", "VISA", "SBI"
+    upiTransactionId:  { type: String },
 
     // Status
     status: {
@@ -87,17 +84,11 @@ const transactionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-    settledAt: {
-      type: Date,
-    },
+    settledAt: { type: Date },
 
-    // Webhook / callback data
-    webhookData: {
-      type: mongoose.Schema.Types.Mixed,
-    },
-    failureReason: {
-      type: String,
-    },
+    // Webhook data + failure info
+    webhookData:   { type: mongoose.Schema.Types.Mixed },
+    failureReason: { type: String },
 
     // Refund info
     refundStatus: {
@@ -105,28 +96,19 @@ const transactionSchema = new mongoose.Schema(
       enum: ['none', 'initiated', 'processed', 'failed'],
       default: 'none',
     },
-    refundAmount: {
-      type: Number,
-      default: 0,
-    },
-    refundId: {
-      type: String,
-    },
-    refundedAt: {
-      type: Date,
-    },
+    refundAmount: { type: Number, default: 0 },
+    refundId:     { type: String },
+    refundedAt:   { type: Date },
 
-    // Timestamps from Cashfree
-    paymentTime: {
-      type: Date,
-    },
+    // Actual payment timestamp from gateway
+    paymentTime: { type: Date },
   },
   {
     timestamps: true,
   }
 );
 
-// ─── Indexes ─────────────────────────────────────────────────────────────────
+// ─── Indexes ──────────────────────────────────────────────────────────────────
 // orderId already indexed via unique:true in schema definition
 transactionSchema.index({ merchantId: 1, createdAt: -1 });
 transactionSchema.index({ cfOrderId: 1 });

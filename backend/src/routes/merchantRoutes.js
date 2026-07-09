@@ -11,17 +11,37 @@ const validate = require('../middleware/validate');
 // Files are stored as base64 strings in MongoDB instead.
 const storage = multer.memoryStorage();
 
+// Allowed extensions AND their corresponding MIME types.
+// Both must match — extension-only checks can be spoofed by renaming files.
+const ALLOWED_KYC_FILES = {
+  '.jpg':  ['image/jpeg'],
+  '.jpeg': ['image/jpeg'],
+  '.png':  ['image/png'],
+  '.pdf':  ['application/pdf'],
+};
+
 const fileFilter = (req, file, cb) => {
-  const allowed = ['.jpg', '.jpeg', '.png', '.pdf'];
   const ext = path.extname(file.originalname).toLowerCase();
-  if (allowed.includes(ext)) cb(null, true);
-  else cb(new Error('Only JPG, PNG, and PDF files are allowed'), false);
+  const allowedMimes = ALLOWED_KYC_FILES[ext];
+
+  if (!allowedMimes) {
+    return cb(new Error('Only JPG, PNG, and PDF files are allowed'), false);
+  }
+
+  if (!allowedMimes.includes(file.mimetype)) {
+    return cb(
+      new Error(`File "${file.originalname}" has an invalid content type. Expected ${allowedMimes.join(' or ')}.`),
+      false
+    );
+  }
+
+  cb(null, true);
 };
 
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB per file
 });
 
 // All routes require authentication + merchant profile

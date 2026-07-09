@@ -61,17 +61,6 @@ const maskString = (str, visibleCount = 4) => {
 };
 
 /**
- * Verify Cashfree webhook signature
- */
-const verifyCashfreeWebhookSignature = (rawBody, signature, secret) => {
-  const computed = crypto
-    .createHmac('sha256', secret)
-    .update(rawBody)
-    .digest('base64');
-  return computed === signature;
-};
-
-/**
  * Get date range for reports
  */
 const getDateRange = (period) => {
@@ -116,6 +105,5 @@ module.exports = {
   getPaginationParams,
   buildPaginationMeta,
   maskString,
-  verifyCashfreeWebhookSignature,
   getDateRange,
 };

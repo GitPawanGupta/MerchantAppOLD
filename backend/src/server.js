@@ -1,11 +1,29 @@
 const app = require('./app');
 const logger = require('./utils/logger');
+const Settings = require('./models/Settings');
+const paymentGatewayFactory = require('./services/gateways/PaymentGatewayFactory');
 
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   logger.info(`ISS Merchant API running on port ${PORT} [${process.env.NODE_ENV || 'development'}]`);
   logger.info(`Health check: http://localhost:${PORT}/api/health`);
+  
+  // Initialize default settings
+  try {
+    await Settings.initializeDefaults();
+    logger.info('Default settings initialized');
+    
+    // Initialize payment gateway factory
+    const gatewaySettings = await Settings.getValue('payment_gateway', { 
+      activeGateway: 'razorpay', 
+      failoverEnabled: false 
+    });
+    await paymentGatewayFactory.initialize(gatewaySettings);
+    logger.info(`Payment gateway factory initialized with: ${gatewaySettings.activeGateway}`);
+  } catch (err) {
+    logger.error(`Settings initialization failed: ${err.message}`);
+  }
 });
 
 // ─── Graceful Shutdown ────────────────────────────────────────────────────────

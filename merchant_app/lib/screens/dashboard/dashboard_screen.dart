@@ -8,6 +8,7 @@ import '../../core/models/transaction_model.dart';
 import '../../core/models/bank_account_model.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../core/widgets/shimmer_widgets.dart' as shimmer;
 import '../../core/constants/app_constants.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -320,31 +321,31 @@ class _DashboardScreenState extends State<DashboardScreen>
                 padding: const EdgeInsets.all(16),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    const ShimmerCard(height: 130),
+                    shimmer.ShimmerCard(height: 130),
                     const SizedBox(height: 12),
                     Row(
-                      children: const [
-                        Expanded(child: ShimmerCard(height: 90)),
-                        SizedBox(width: 12),
-                        Expanded(child: ShimmerCard(height: 90)),
+                      children: [
+                        Expanded(child: shimmer.ShimmerCard(height: 90)),
+                        const SizedBox(width: 12),
+                        Expanded(child: shimmer.ShimmerCard(height: 90)),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Row(
-                      children: const [
-                        Expanded(child: ShimmerCard(height: 90)),
-                        SizedBox(width: 12),
-                        Expanded(child: ShimmerCard(height: 90)),
+                      children: [
+                        Expanded(child: shimmer.ShimmerCard(height: 90)),
+                        const SizedBox(width: 12),
+                        Expanded(child: shimmer.ShimmerCard(height: 90)),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const ShimmerCard(height: 100),
+                    shimmer.ShimmerCard(height: 100),
                     const SizedBox(height: 12),
-                    const ShimmerCard(height: 70),
+                    shimmer.ShimmerCard(height: 70),
                     const SizedBox(height: 8),
-                    const ShimmerCard(height: 70),
+                    shimmer.ShimmerCard(height: 70),
                     const SizedBox(height: 8),
-                    const ShimmerCard(height: 70),
+                    shimmer.ShimmerCard(height: 70),
                   ]),
                 ),
               )

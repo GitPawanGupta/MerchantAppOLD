@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
 import '../../core/models/settlement_model.dart';
+import '../../core/models/bank_account_model.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../core/widgets/shimmer_widgets.dart';
 import '../../core/constants/app_constants.dart';
+import 'widgets/settlement_request_sheet.dart';
 
 class SettlementListScreen extends StatefulWidget {
   const SettlementListScreen({super.key});
@@ -20,15 +23,85 @@ class _SettlementListScreenState extends State<SettlementListScreen> {
   String _statusFilter = '';
   final _scroll = ScrollController();
 
+  // Pending settlement data
+  double _pendingAmount = 0;
+  int _pendingTxnCount = 0;
+  double _pendingCommission = 0;
+  List<BankAccountModel> _bankAccounts = [];
+
   @override
   void initState() {
     super.initState();
     _fetch();
+    _loadPendingData();
     _scroll.addListener(() {
       if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) {
         if (!_loading && _hasMore) _fetch();
       }
     });
+  }
+
+  Future<void> _loadPendingData() async {
+    try {
+      // Load merchant dashboard to get pending settlement data
+      final dashRes = await ApiService.get('/merchant/dashboard');
+      final data = dashRes['data'] as Map<String, dynamic>;
+
+      setState(() {
+        _pendingAmount = (data['pendingSettlement'] as num?)?.toDouble() ?? 0;
+        _pendingTxnCount =
+            (data['unsettledTransactions'] as num?)?.toInt() ?? 0;
+        _pendingCommission =
+            (data['pendingCommission'] as num?)?.toDouble() ?? 0;
+      });
+
+      // Load bank accounts
+      final bankRes = await ApiService.get('/merchant/bank-accounts');
+      final bankList =
+          (bankRes['data'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      setState(() {
+        _bankAccounts = bankList
+            .map((b) => BankAccountModel.fromJson(b))
+            .toList();
+      });
+    } catch (e) {
+      // Silently fail - pending data is optional
+    }
+  }
+
+  Future<void> _showRequestSheet() async {
+    if (_pendingAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No pending amount available for settlement'),
+          backgroundColor: AppTheme.warning,
+        ),
+      );
+      return;
+    }
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: SettlementRequestSheet(
+          pendingAmount: _pendingAmount,
+          transactionCount: _pendingTxnCount,
+          commissionAmount: _pendingCommission,
+          bankAccounts: _bankAccounts,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      // Reload data after successful request
+      _fetch(reset: true);
+      _loadPendingData();
+    }
   }
 
   @override
@@ -75,6 +148,17 @@ class _SettlementListScreenState extends State<SettlementListScreen> {
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(title: const Text('Settlements')),
+      floatingActionButton: _pendingAmount > 0
+          ? FloatingActionButton.extended(
+              onPressed: _showRequestSheet,
+              backgroundColor: AppTheme.primary,
+              icon: const Icon(Icons.account_balance_wallet),
+              label: Text(
+                'Request ₹${_pendingAmount.toStringAsFixed(0)}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            )
+          : null,
       body: Column(
         children: [
           // Status filter chips
@@ -116,7 +200,12 @@ class _SettlementListScreenState extends State<SettlementListScreen> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => _fetch(reset: true),
-              child: _items.isEmpty && !_loading
+              child: _loading && _items.isEmpty
+                  ? const ListShimmer(
+                      itemShimmer: SettlementShimmer(),
+                      itemCount: 8,
+                    )
+                  : _items.isEmpty && !_loading
                   ? _error != null
                         ? EmptyState(
                             icon: Icons.wifi_off,
@@ -232,9 +321,13 @@ class _SettlementCard extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    s.completedAt != null ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                    s.completedAt != null
+                        ? Icons.check_circle_rounded
+                        : Icons.schedule_rounded,
                     size: 14,
-                    color: s.completedAt != null ? AppTheme.accent : statusColor,
+                    color: s.completedAt != null
+                        ? AppTheme.accent
+                        : statusColor,
                   ),
                   const SizedBox(width: 6),
                   Text(

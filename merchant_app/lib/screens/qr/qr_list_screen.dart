@@ -4,6 +4,7 @@ import '../../core/services/api_service.dart';
 import '../../core/models/qr_model.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../core/widgets/shimmer_widgets.dart';
 
 class QRListScreen extends StatefulWidget {
   const QRListScreen({super.key});
@@ -99,7 +100,7 @@ class _QRListScreenState extends State<QRListScreen>
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ListShimmer(itemShimmer: QRCardShimmer(), itemCount: 6)
           : _error != null
           ? EmptyState(
               icon: Icons.wifi_off,

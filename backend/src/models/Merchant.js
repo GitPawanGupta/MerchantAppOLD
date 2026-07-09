@@ -43,7 +43,6 @@ const bankAccountSchema = new mongoose.Schema(
     isPrimary: { type: Boolean, default: false },
     isVerified: { type: Boolean, default: false },
     verifiedAt: { type: Date },
-    cashfreeBeneficiaryId: { type: String },
   }
 );
 
@@ -154,11 +153,6 @@ const merchantSchema = new mongoose.Schema(
       default: 'pending',
     },
 
-    // Cashfree beneficiary ID (for payout) — kept for legacy, not used with Partner Tech
-    cashfreeBeneficiaryId: {
-      type: String,
-    },
-
     // ─── Razorpay Partner Technology ─────────────────────────────────────────
     // Set when merchant completes OAuth flow to connect their Razorpay account
     razorpayLinkedAccountId: {
@@ -173,13 +167,37 @@ const merchantSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Access token expiry (short-lived, ~2 hours)
     razorpayTokenExpiresAt: {
       type: Date,
       default: null,
     },
-    razorpayPublicToken: {
+    // Refresh token expiry (180 days per Razorpay docs)
+    razorpayRefreshTokenExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    // Temporary CSRF nonce stored during OAuth initiation, cleared after callback
+    razorpayOAuthState: {
       type: String,
-      default: null,  // Used as key_id when creating orders on merchant account
+      default: null,
+    },
+    // true when refresh token has expired — merchant must re-do OAuth
+    requiresReAuth: {
+      type: Boolean,
+      default: false,
+    },
+    // ─── Linked Account (Option C — API-based onboarding) ─────────────────────
+    // Stakeholder ID created via POST /v2/accounts/:id/stakeholders
+    razorpayStakeholderId: {
+      type: String,
+      default: null,
+    },
+    // Razorpay account lifecycle status: created → under_review → activated/suspended
+    razorpayAccountStatus: {
+      type: String,
+      enum: ['created', 'under_review', 'activated', 'suspended', null],
+      default: null,
     },
     isRazorpayLinked: {
       type: Boolean,
@@ -219,7 +237,7 @@ merchantSchema.pre('save', async function (next) {
     this.merchantId = `MER${String(count + 1).padStart(6, '0')}`;
   }
 
-  // Sync bankDetails and cashfreeBeneficiaryId with primary account
+  // Sync bankDetails with primary account
   if (this.bankAccounts && this.bankAccounts.length > 0) {
     const primary = this.bankAccounts.find(acc => acc.isPrimary) || this.bankAccounts[0];
     this.bankDetails = {
@@ -231,7 +249,6 @@ merchantSchema.pre('save', async function (next) {
       isVerified: primary.isVerified,
       verifiedAt: primary.verifiedAt
     };
-    this.cashfreeBeneficiaryId = primary.cashfreeBeneficiaryId;
   }
   next();
 });

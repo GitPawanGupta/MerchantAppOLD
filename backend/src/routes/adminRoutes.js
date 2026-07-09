@@ -29,6 +29,8 @@ router.patch(
   validate,
   adminController.updateKYCStatus
 );
+// Admin-only: view KYC documents (base64 data URIs) — excluded from all other queries
+router.get('/merchants/:merchantId/kyc/documents', adminController.getKYCDocuments);
 router.post('/merchants/:merchantId/settle', adminController.manualSettle);
 
 // ── Transaction Management ────────────────────────────────────────────────────
@@ -38,6 +40,9 @@ router.get('/transactions/:orderId', adminController.getTransactionDetail);
 // ── Settlement Management ─────────────────────────────────────────────────────
 router.get('/settlements', adminController.listAllSettlements);
 router.get('/settlements/:settlementRef', adminController.getSettlementDetail);
+router.get('/settlements/:settlementRef/transfer-details', adminController.getSettlementTransferDetails);
+router.patch('/settlements/:settlementRef/status', adminController.updateSettlementStatus);
+router.post('/settlements/bulk-approve', adminController.bulkApproveSettlements);
 
 // ── Commission Config ─────────────────────────────────────────────────────────
 router.get('/commission/configs', adminController.listCommissionConfigs);

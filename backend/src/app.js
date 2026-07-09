@@ -56,13 +56,13 @@ app.use(
       'Content-Type',
       'Authorization',
       'x-webhook-signature',
-      'x-cashfree-signature',
+      'x-razorpay-signature',
     ],
   })
 );
 
 // ─── Request Parsing ──────────────────────────────────────────────────────────
-// NOTE: /api/payment/webhook and /api/settlement/payout-webhook apply
+// NOTE: /api/payment/webhook and /api/partner/webhook apply
 // express.raw() themselves inside their own route files — do NOT add global
 // express.raw() here or it will conflict with express.json() on other routes.
 app.use(express.json({ limit: '10mb' }));

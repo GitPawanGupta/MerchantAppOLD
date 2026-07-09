@@ -2,7 +2,7 @@ const { body, query } = require('express-validator');
 const paymentService = require('../services/paymentService');
 const { successResponse, errorResponse } = require('../utils/apiResponse');
 const { getPaginationParams, buildPaginationMeta } = require('../utils/helpers');
-const { buildPayPage } = require('./payPageBuilder');
+const { buildPayPage, buildResultPage, buildErrorPage } = require('./payPageBuilder');
 const Transaction = require('../models/Transaction');
 const QRCode = require('../models/QRCode');
 const Merchant = require('../models/Merchant');
@@ -70,6 +70,7 @@ const showPayPage = async (req, res, next) => {
   try {
     logger.info(`showPayPage hit: ${req.originalUrl}`);
 
+    // ── Resolve qrId from query (handles all casing variants) ──
     let qrId = req.query.qrId || req.query.qrid || req.query.qr_id;
     if (!qrId) {
       for (const key of Object.keys(req.query)) {
@@ -82,26 +83,80 @@ const showPayPage = async (req, res, next) => {
       const m = (req.originalUrl || '').match(/(?:qrId|qrid|qr_id)=([^&?#\s]+)/i);
       if (m) qrId = decodeURIComponent(m[1]);
     }
-    if (!qrId) return res.status(400).send('<h1>Invalid Request: qrId is required</h1>');
 
-    const qr = await QRCode.findOne({ qrId, isActive: true }).populate('merchantId');
-    if (!qr || !qr.merchantId) {
-      return res.status(404).send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Invalid QR</title>
-        <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:sans-serif;background:#f0f4ff;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}.card{background:#fff;border-radius:20px;padding:48px 32px;text-align:center;max-width:360px;width:100%;box-shadow:0 4px 24px rgba(0,0,0,.08)}.icon{font-size:48px;margin-bottom:16px}h2{font-size:20px;font-weight:700;color:#111;margin-bottom:8px}p{font-size:14px;color:#6b7280}</style>
-        </head><body><div class="card"><div class="icon">❌</div><h2>QR Code Not Found</h2><p>This QR code is invalid, inactive, or expired.</p></div></body></html>`);
+    if (!qrId) {
+      return res.status(400).send(buildErrorPage({
+        icon: '🔗',
+        title: 'Invalid Link',
+        message: 'This payment link is missing required information. Please ask the merchant for a valid QR code.',
+      }));
     }
 
-    const merchantName = qr.merchantId.businessName;
-    const label        = qr.label || 'Payment';
-    const fixedAmount  = qr.fixedAmount || 0;
-    const rzpKeyId     = process.env.RAZORPAY_KEY_ID;
-    const avatarLetter = merchantName.charAt(0).toUpperCase();
-    const safeMerchant = merchantName.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
-    const safeLabel    = label.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'");
+    // ── Fetch QR + merchant ──
+    const qr = await QRCode.findOne({ qrId }).populate('merchantId');
 
-    return res.send(buildPayPage({ merchantName, label, fixedAmount, rzpKeyId, qrId, avatarLetter, safeMerchant, safeLabel }));
+    // Not found at all
+    if (!qr || !qr.merchantId) {
+      return res.status(404).send(buildErrorPage({
+        icon: '❌',
+        title: 'QR Code Not Found',
+        message: 'This QR code does not exist or has been removed. Please ask the merchant for a new one.',
+      }));
+    }
+
+    // Expired dynamic QR — mark inactive and show proper message
+    if (qr.expiresAt && new Date() > qr.expiresAt) {
+      if (qr.isActive) {
+        await QRCode.findByIdAndUpdate(qr._id, { isActive: false });
+      }
+      return res.status(410).send(buildErrorPage({
+        icon: '⏰',
+        title: 'QR Code Expired',
+        message: 'This payment link has expired. Please ask the merchant to generate a new QR code.',
+      }));
+    }
+
+    // Inactive QR
+    if (!qr.isActive) {
+      return res.status(410).send(buildErrorPage({
+        icon: '🚫',
+        title: 'QR Code Inactive',
+        message: 'This QR code has been deactivated. Please ask the merchant for an active QR code.',
+      }));
+    }
+
+    // Merchant not active
+    if (qr.merchantId.status !== 'active') {
+      return res.status(403).send(buildErrorPage({
+        icon: '🏪',
+        title: 'Merchant Unavailable',
+        message: 'This merchant is currently not accepting payments. Please try again later.',
+      }));
+    }
+
+    // ── Increment scan count (atomic) ──
+    await QRCode.findByIdAndUpdate(qr._id, { $inc: { scanCount: 1 } });
+
+    // ── Build page opts ──
+    const merchant         = qr.merchantId;
+    const merchantName     = merchant.businessName;
+    const merchantCategory = merchant.businessCategory || 'Business';
+    const label            = qr.label || 'Payment';
+    const fixedAmount      = qr.fixedAmount || 0;
+    const rzpKeyId         = process.env.RAZORPAY_KEY_ID;
+    const avatarLetter     = merchantName.charAt(0).toUpperCase();
+    const logoUrl          = merchant.logo || null;
+
+    return res.send(buildPayPage({
+      merchantName,
+      merchantCategory,
+      label,
+      fixedAmount,
+      rzpKeyId,
+      qrId,
+      avatarLetter,
+      logoUrl,
+    }));
   } catch (error) { next(error); }
 };
 
@@ -109,61 +164,47 @@ const showPayPage = async (req, res, next) => {
 const paymentReturn = async (req, res, next) => {
   const { order_id, razorpay_payment_id, razorpay_signature, error } = req.query;
   try {
+    // Validate minimum params
+    if (!order_id) {
+      return res.status(400).send(buildErrorPage({
+        icon: '🔗',
+        title: 'Invalid Return',
+        message: 'Order information is missing. Please contact the merchant.',
+      }));
+    }
+
     const tx = await paymentService.verifyPaymentOrder(
       order_id,
       razorpay_payment_id || null,
-      razorpay_signature || null
+      razorpay_signature  || null
     );
-    const merchant = await Merchant.findById(tx.merchantId);
-    const merchantName = merchant ? merchant.businessName : 'Merchant';
-    const isSuccess = tx.status === 'success';
 
-    return res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Payment ${isSuccess ? 'Successful' : 'Failed'}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Inter',sans-serif;background:#f0f4ff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
-.card{background:#fff;border-radius:24px;box-shadow:0 4px 32px rgba(0,0,0,.1);width:100%;max-width:400px;overflow:hidden;}
-.result-header{padding:40px 24px 28px;text-align:center;background:${isSuccess ? 'linear-gradient(135deg,#dcfce7,#bbf7d0)' : 'linear-gradient(135deg,#fee2e2,#fecaca)'};}
-.result-icon{width:72px;height:72px;border-radius:50%;background:${isSuccess ? '#16a34a' : '#dc2626'};color:#fff;font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
-.result-title{font-size:22px;font-weight:800;color:${isSuccess ? '#15803d' : '#b91c1c'};}
-.result-sub{font-size:13px;color:${isSuccess ? '#166534' : '#991b1b'};margin-top:6px;}
-.details{padding:24px;}
-.detail-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #f3f4f6;}
-.detail-row:last-child{border-bottom:none;}
-.detail-label{font-size:13px;color:#6b7280;font-weight:500;}
-.detail-value{font-size:13px;font-weight:700;color:#111827;text-align:right;max-width:60%;word-break:break-all;}
-.detail-value.amount{font-size:18px;color:#528FF0;}
-.close-btn{margin:0 24px 24px;display:block;width:calc(100% - 48px);height:52px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;transition:background .2s;}
-.close-btn:hover{background:#1f2937;}
-.secure-footer{text-align:center;padding:0 24px 20px;font-size:11px;color:#9ca3af;}
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="result-header">
-    <div class="result-icon">${isSuccess ? '&#10003;' : '&#10007;'}</div>
-    <div class="result-title">${isSuccess ? 'Payment Successful!' : 'Payment Failed'}</div>
-    <div class="result-sub">${isSuccess ? 'Your payment was completed successfully.' : (error || 'There was an issue processing your payment.')}</div>
-  </div>
-  <div class="details">
-    <div class="detail-row"><span class="detail-label">Pay To</span><span class="detail-value">${merchantName}</span></div>
-    <div class="detail-row"><span class="detail-label">Amount</span><span class="detail-value amount">&#8377;${tx.amount.toFixed(2)}</span></div>
-    <div class="detail-row"><span class="detail-label">Order ID</span><span class="detail-value">${tx.orderId}</span></div>
-    ${isSuccess && tx.cfPaymentId ? `<div class="detail-row"><span class="detail-label">Payment ID</span><span class="detail-value">${tx.cfPaymentId}</span></div>` : ''}
-    ${isSuccess && tx.cfReferenceId ? `<div class="detail-row"><span class="detail-label">Bank Ref</span><span class="detail-value">${tx.cfReferenceId}</span></div>` : ''}
-    <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value" style="color:${isSuccess ? '#16a34a' : '#dc2626'}">${tx.status.toUpperCase()}</span></div>
-  </div>
-  <button class="close-btn" onclick="window.close()">Done</button>
-  <div class="secure-footer">Secured by Razorpay &middot; ISS Instant Settlement</div>
-</div>
-</body></html>`);
-  } catch (err) { next(err); }
+    const merchant     = await Merchant.findById(tx.merchantId).select('businessName');
+    const merchantName = merchant ? merchant.businessName : 'Merchant';
+    const isSuccess    = tx.status === 'success';
+
+    return res.send(buildResultPage({
+      isSuccess,
+      merchantName,
+      amount:      tx.amount,
+      orderId:     tx.orderId,
+      paymentId:   tx.cfPaymentId   || null,
+      referenceId: tx.cfReferenceId || null,
+      errorMsg:    error || tx.failureReason || null,
+    }));
+  } catch (err) {
+    // Even on unexpected errors show a clean result page, not a raw crash
+    logger.error(`paymentReturn error: ${err.message}`);
+    return res.status(500).send(buildResultPage({
+      isSuccess:    false,
+      merchantName: 'Merchant',
+      amount:       0,
+      orderId:      order_id || 'N/A',
+      paymentId:    null,
+      referenceId:  null,
+      errorMsg:     'Unable to verify payment status. Please contact support with your Order ID.',
+    }));
+  }
 };
 
 // ─── listTransactions ─────────────────────────────────────────────────────────

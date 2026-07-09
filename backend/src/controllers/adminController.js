@@ -1,10 +1,9 @@
-const { body, param } = require('express-validator');
+const { body } = require('express-validator');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Merchant = require('../models/Merchant');
 const Transaction = require('../models/Transaction');
 const Settlement = require('../models/Settlement');
-const Payout = require('../models/Payout');
 const commissionService = require('../services/commissionService');
 const settlementService = require('../services/settlementService');
 const reportingService = require('../services/reportingService');
@@ -33,8 +32,8 @@ const merchantCommissionValidation = [
 
 const kycActionValidation = [
   body('action')
-    .isIn(['approve', 'reject'])
-    .withMessage('Action must be approve or reject'),
+    .isIn(['approve', 'reject', 'under_review'])
+    .withMessage('Action must be approve, reject, or under_review'),
   body('rejectionReason')
     .if(body('action').equals('reject'))
     .notEmpty()
@@ -102,7 +101,8 @@ const listMerchants = async (req, res, next) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .select('-bankDetails.accountNumber -kyc.aadharNumber'),
+        // Exclude sensitive fields and heavy base64 KYC documents from list view
+        .select('-bankDetails.accountNumber -kyc.aadharNumber -kyc.panDoc -kyc.aadharDoc -kyc.gstDoc'),
       Merchant.countDocuments(filter),
     ]);
 
@@ -125,7 +125,9 @@ const getMerchantDetail = async (req, res, next) => {
   try {
     const merchant = await Merchant.findOne({ merchantId: req.params.merchantId })
       .populate('userId', 'name email phone isActive isEmailVerified lastLogin createdAt')
-      .populate('onboardedBy', 'name email');
+      .populate('onboardedBy', 'name email')
+      // KYC documents (base64) served separately via GET /kyc/documents to keep this response lean
+      .select('-kyc.panDoc -kyc.aadharDoc -kyc.gstDoc');
 
     if (!merchant) {
       return errorResponse(res, 'Merchant not found', 404);
@@ -174,7 +176,10 @@ const updateMerchantStatus = async (req, res, next) => {
 
 /**
  * PATCH /api/admin/merchants/:merchantId/kyc
- * Approve or reject KYC
+ * Move KYC through its review lifecycle:
+ *   under_review — admin has started reviewing (blocks merchant re-submission)
+ *   approve      — KYC accepted, merchant auto-activated if still pending
+ *   reject       — KYC rejected with a reason (merchant can re-submit)
  */
 const updateKYCStatus = async (req, res, next) => {
   try {
@@ -185,16 +190,40 @@ const updateKYCStatus = async (req, res, next) => {
       return errorResponse(res, 'Merchant not found', 404);
     }
 
-    if (!['submitted', 'under_review'].includes(merchant.kyc?.status)) {
-      return errorResponse(res, `KYC is currently '${merchant.kyc?.status}' and cannot be actioned`, 400);
+    const currentStatus = merchant.kyc?.status;
+
+    // Validate transition — only actionable from submitted or under_review
+    if (!['submitted', 'under_review'].includes(currentStatus)) {
+      return errorResponse(
+        res,
+        `KYC is currently '${currentStatus}' and cannot be actioned`,
+        400
+      );
     }
 
-    merchant.kyc.status = action === 'approve' ? 'approved' : 'rejected';
-    merchant.kyc.rejectionReason = action === 'reject' ? rejectionReason : undefined;
-    merchant.kyc.verifiedAt = action === 'approve' ? new Date() : undefined;
-    merchant.kyc.verifiedBy = req.user._id;
+    // under_review: admin marks KYC as being actively reviewed
+    if (action === 'under_review') {
+      if (currentStatus !== 'submitted') {
+        return errorResponse(res, 'KYC must be in submitted status to mark as under_review', 400);
+      }
+      merchant.kyc.status = 'under_review';
+      await merchant.save();
 
-    // Auto-activate merchant on KYC approval if they are still pending
+      logger.info(`Admin ${req.user._id} marked KYC under_review for merchant ${merchant.merchantId}`);
+      return successResponse(
+        res,
+        { merchantId: merchant.merchantId, kycStatus: merchant.kyc.status },
+        'KYC marked as under review'
+      );
+    }
+
+    // approve / reject
+    merchant.kyc.status          = action === 'approve' ? 'approved' : 'rejected';
+    merchant.kyc.rejectionReason = action === 'reject' ? rejectionReason : undefined;
+    merchant.kyc.verifiedAt      = action === 'approve' ? new Date() : undefined;
+    merchant.kyc.verifiedBy      = req.user._id;
+
+    // Auto-activate merchant on KYC approval if still pending
     if (action === 'approve' && merchant.status === 'pending') {
       merchant.status = 'active';
       await User.findByIdAndUpdate(merchant.userId, { isActive: true });
@@ -202,13 +231,62 @@ const updateKYCStatus = async (req, res, next) => {
 
     await merchant.save();
 
-    logger.info(
-      `Admin ${req.user._id} ${action}d KYC for merchant ${merchant.merchantId}`
-    );
+    logger.info(`Admin ${req.user._id} ${action}d KYC for merchant ${merchant.merchantId}`);
+
+    // ── Auto-trigger Razorpay linked account creation on KYC approval ──────
+    // Runs non-blocking (setImmediate) so it doesn't delay the admin response.
+    // Only triggered if:
+    //   1. Action is approve
+    //   2. Merchant does NOT already have a linked Razorpay account
+    //   3. Merchant has a PAN number in KYC (required by Razorpay)
+    if (action === 'approve' && !merchant.razorpayLinkedAccountId && merchant.kyc?.panNumber) {
+      setImmediate(async () => {
+        try {
+          const partnerService = require('../services/partnerService');
+
+          // Reload with user populated for email/phone
+          const freshMerchant = await Merchant.findById(merchant._id).populate('userId', 'email phone name');
+
+          await freshMerchant.populate('userId', 'email phone name');
+
+          // Step 1+2: Create linked account + stakeholder
+          await partnerService.createLinkedAccount(freshMerchant, {
+            contactName:     freshMerchant.userId?.name   || freshMerchant.businessName,
+            contactPhone:    freshMerchant.userId?.phone,
+            contactEmail:    freshMerchant.userId?.email,
+            panNumber:       freshMerchant.kyc?.panNumber,
+            gstNumber:       freshMerchant.kyc?.gstNumber,
+            businessType:    freshMerchant.kyc?.businessType,
+            businessAddress: freshMerchant.businessAddress,
+          });
+
+          // Reload after createLinkedAccount saved razorpayLinkedAccountId
+          const afterAccount = await Merchant.findById(merchant._id);
+
+          await partnerService.createStakeholder(afterAccount, {
+            name:     freshMerchant.userId?.name || freshMerchant.businessName,
+            email:    freshMerchant.userId?.email,
+            phone:    freshMerchant.userId?.phone,
+            panNumber: freshMerchant.kyc?.panNumber,
+            percentageOwnership: 100,
+            address: freshMerchant.businessAddress,
+          });
+
+          logger.info(`Auto Razorpay onboarding completed for merchant ${merchant.merchantId}`);
+        } catch (rzpErr) {
+          // Non-fatal — admin can manually trigger onboarding from merchant detail page
+          logger.error(`Auto Razorpay onboarding failed for ${merchant.merchantId}: ${rzpErr.message}`);
+        }
+      });
+    }
 
     return successResponse(
       res,
-      { merchantId: merchant.merchantId, kycStatus: merchant.kyc.status, merchantStatus: merchant.status },
+      {
+        merchantId:     merchant.merchantId,
+        kycStatus:      merchant.kyc.status,
+        merchantStatus: merchant.status,
+      },
       `KYC ${action}d successfully`
     );
   } catch (error) {
@@ -362,6 +440,83 @@ const getSettlementDetail = async (req, res, next) => {
   try {
     const settlement = await settlementService.getSettlementDetail(req.params.settlementRef);
     return successResponse(res, settlement);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PATCH /api/admin/settlements/:settlementRef/status
+ * One-click settlement status update (approve/reject after manual bank transfer)
+ */
+const updateSettlementStatus = async (req, res, next) => {
+  try {
+    const { status, payoutReferenceId, payoutMode, failureReason } = req.body;
+
+    if (!status) {
+      return errorResponse(res, 'Status is required', 400);
+    }
+
+    const settlement = await settlementService.updateSettlementStatus(
+      req.params.settlementRef,
+      { status, payoutReferenceId, payoutMode, failureReason },
+      req.user._id
+    );
+
+    return successResponse(
+      res,
+      {
+        settlementRef: settlement.settlementRef,
+        status: settlement.status,
+        netAmount: settlement.netAmount,
+        payoutReferenceId: settlement.payoutReferenceId,
+        completedAt: settlement.completedAt,
+      },
+      `Settlement ${status === 'success' ? 'approved' : status === 'failed' ? 'rejected' : 'updated'} successfully`
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/admin/settlements/:settlementRef/transfer-details
+ * Get formatted bank transfer details for easy copy-paste into bank portal
+ */
+const getSettlementTransferDetails = async (req, res, next) => {
+  try {
+    const details = await settlementService.getSettlementTransferDetails(
+      req.params.settlementRef
+    );
+    return successResponse(res, details);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/admin/settlements/bulk-approve
+ * Bulk approve multiple settlements at once
+ */
+const bulkApproveSettlements = async (req, res, next) => {
+  try {
+    const { settlementRefs, payoutMode, payoutReferenceIdPrefix } = req.body;
+
+    if (!settlementRefs || !Array.isArray(settlementRefs) || settlementRefs.length === 0) {
+      return errorResponse(res, 'settlementRefs array is required', 400);
+    }
+
+    const results = await settlementService.bulkApproveSettlements(
+      settlementRefs,
+      { payoutMode, payoutReferenceIdPrefix },
+      req.user._id
+    );
+
+    return successResponse(
+      res,
+      results,
+      `Bulk approval completed: ${results.success.length} succeeded, ${results.failed.length} failed`
+    );
   } catch (error) {
     next(error);
   }
@@ -775,6 +930,44 @@ const seedAdmin = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /api/admin/merchants/:merchantId/kyc/documents
+ * Admin-only: serve KYC documents for a specific merchant.
+ *
+ * Documents are stored as base64 data URIs in MongoDB (kyc.panDoc, aadharDoc, gstDoc).
+ * This endpoint is the ONLY place they are exposed — they are excluded from all
+ * other merchant queries via .select('-kyc.panDoc -kyc.aadharDoc -kyc.gstDoc').
+ *
+ * Returns metadata + base64 data URIs. Admin can render or download from frontend.
+ */
+const getKYCDocuments = async (req, res, next) => {
+  try {
+    // Explicitly select only the document fields — never included in other queries
+    const merchant = await Merchant.findOne({ merchantId: req.params.merchantId })
+      .select('merchantId kyc.status kyc.panDoc kyc.aadharDoc kyc.gstDoc kyc.panNumber kyc.businessType');
+
+    if (!merchant) {
+      return errorResponse(res, 'Merchant not found', 404);
+    }
+
+    const kyc = merchant.kyc || {};
+
+    return successResponse(res, {
+      merchantId:   merchant.merchantId,
+      kycStatus:    kyc.status,
+      panNumber:    kyc.panNumber,
+      businessType: kyc.businessType,
+      documents: {
+        panDoc:    kyc.panDoc    ? { hasFile: true,  dataUri: kyc.panDoc    } : { hasFile: false },
+        aadharDoc: kyc.aadharDoc ? { hasFile: true,  dataUri: kyc.aadharDoc } : { hasFile: false },
+        gstDoc:    kyc.gstDoc    ? { hasFile: true,  dataUri: kyc.gstDoc    } : { hasFile: false },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   // Validation
   globalCommissionValidation,
@@ -789,6 +982,7 @@ module.exports = {
   getMerchantDetail,
   updateMerchantStatus,
   updateKYCStatus,
+  getKYCDocuments,
   manualSettle,
   // Transactions
   listAllTransactions,
@@ -796,6 +990,9 @@ module.exports = {
   // Settlements
   listAllSettlements,
   getSettlementDetail,
+  updateSettlementStatus,
+  getSettlementTransferDetails,
+  bulkApproveSettlements,
   // Commission
   listCommissionConfigs,
   setGlobalCommission,

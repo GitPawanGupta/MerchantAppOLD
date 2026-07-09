@@ -3,6 +3,7 @@ import '../../core/services/api_service.dart';
 import '../../core/models/transaction_model.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../core/widgets/shimmer_widgets.dart';
 import '../../core/constants/app_constants.dart';
 
 class TransactionListScreen extends StatefulWidget {
@@ -197,7 +198,12 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
           Expanded(
             child: RefreshIndicator(
               onRefresh: () => _fetch(reset: true),
-              child: _filteredItems.isEmpty && !_loading
+              child: _loading && _items.isEmpty
+                  ? const ListShimmer(
+                      itemShimmer: TransactionShimmer(),
+                      itemCount: 8,
+                    )
+                  : _filteredItems.isEmpty && !_loading
                   ? _error != null
                         ? EmptyState(
                             icon: Icons.wifi_off,

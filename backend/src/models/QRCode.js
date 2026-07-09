@@ -12,17 +12,17 @@ const qrCodeSchema = new mongoose.Schema(
       unique: true,
       required: true,
     },
-    // QR type: static (fixed) or dynamic (per-transaction)
+    // QR type: static (reusable, any amount) or dynamic (fixed amount, expires)
     type: {
       type: String,
       enum: ['static', 'dynamic'],
       default: 'static',
     },
-    // For dynamic QR - linked to a specific amount/order
+    // For dynamic QR — fixed payment amount
     fixedAmount: {
       type: Number,
       min: 1,
-      default: null, // null = any amount
+      default: null,
     },
     label: {
       type: String,
@@ -30,37 +30,34 @@ const qrCodeSchema = new mongoose.Schema(
       maxlength: 100,
       default: 'Payment QR',
     },
-    // QR image (base64 or URL)
-    qrImageBase64: {
-      type: String,
-    },
+    // QR image is NOT stored in DB — generated on-the-fly by GET /:qrId/image
+    // to keep document size small. qrImageUrl kept for future CDN/S3 use.
     qrImageUrl: {
       type: String,
+      default: null,
     },
-    // Payment URL embedded in QR
+    // Payment URL embedded inside the QR image
     paymentUrl: {
       type: String,
       required: true,
-    },
-    // UPI VPA if applicable
-    upiVpa: {
-      type: String,
     },
     isActive: {
       type: Boolean,
       default: true,
     },
     // Usage stats
-    scanCount: { type: Number, default: 0 },
-    successfulPayments: { type: Number, default: 0 },
+    scanCount:            { type: Number, default: 0 },
+    successfulPayments:   { type: Number, default: 0 },
     totalAmountCollected: { type: Number, default: 0 },
 
-    // Expiry for dynamic QR
+    // Expiry for dynamic QR (null = never expires)
+    // NOT using a TTL index — we handle expiry in application code so we can
+    // return a proper 410 "expired" message instead of a 404 "not found".
     expiresAt: {
       type: Date,
       default: null,
     },
-    // Order ID if tied to a specific transaction
+    // Internal order ID if tied to a specific transaction (dynamic QR)
     orderId: {
       type: String,
       default: null,
@@ -71,11 +68,12 @@ const qrCodeSchema = new mongoose.Schema(
   }
 );
 
-// ─── Indexes ─────────────────────────────────────────────────────────────────
-// qrId already indexed via unique:true in schema definition
-qrCodeSchema.index({ merchantId: 1 });
+// ─── Indexes ──────────────────────────────────────────────────────────────────
+// qrId already indexed via unique:true above
+qrCodeSchema.index({ merchantId: 1, createdAt: -1 });
 qrCodeSchema.index({ isActive: 1 });
-qrCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, partialFilterExpression: { expiresAt: { $ne: null } } });
+// expiresAt index for efficient querying of expired QRs (no TTL — app handles expiry)
+qrCodeSchema.index({ expiresAt: 1 }, { sparse: true });
 
 const QRCode = mongoose.model('QRCode', qrCodeSchema);
 module.exports = QRCode;

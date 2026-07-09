@@ -21,7 +21,6 @@ const getProfile = async (merchantId) => {
   // Remove sensitive/internal fields not visible to merchant
   delete data.commissionRate;
   delete data.totalCommission;
-  delete data.cashfreeBeneficiaryId;
   delete data.razorpayAccessToken;
   delete data.razorpayRefreshToken;
 
@@ -84,6 +83,12 @@ const submitKYC = async (merchantId, kycData, files = {}) => {
 
   if (['approved'].includes(merchant.kyc?.status)) {
     const err = new Error('KYC is already approved and cannot be re-submitted');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (merchant.kyc?.status === 'under_review') {
+    const err = new Error('KYC is currently under review and cannot be re-submitted. Please wait for admin decision.');
     err.statusCode = 400;
     throw err;
   }
@@ -182,9 +187,6 @@ const updateBankDetails = async (merchantId, bankData) => {
   };
 
   await merchant.save();
-
-  // Also register/update beneficiary in Cashfree Payout (async)
-  // This is handled separately in settlementService to avoid tight coupling
 
   const result = merchant.toObject();
   result.bankDetails.accountNumber = maskString(result.bankDetails.accountNumber, 4);

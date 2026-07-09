@@ -18,13 +18,12 @@ router.post(
 // Verify payment status (polled after redirect)
 router.get('/verify', paymentController.verifyPayment);
 
-// Cashfree webhook — raw body needed for signature verification
+// Razorpay webhook — raw body needed for HMAC-SHA256 signature verification
 router.post(
   '/webhook',
   webhookLimiter,
   express.raw({ type: 'application/json' }),
   (req, res, next) => {
-    // Attach raw body string for signature check; parse JSON for handler
     if (Buffer.isBuffer(req.body)) {
       req.rawBody = req.body.toString('utf8');
       try { req.body = JSON.parse(req.rawBody); } catch { req.body = {}; }
@@ -34,7 +33,7 @@ router.post(
   paymentController.webhook
 );
 
-// Browser return redirect from Cashfree
+// Browser return redirect from Razorpay checkout
 router.get('/return', paymentController.paymentReturn);
 
 // Also expose a public pay page shortcut (QR scan lands here)

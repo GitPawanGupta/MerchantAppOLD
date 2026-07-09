@@ -4,6 +4,7 @@ import '../../core/providers/auth_provider.dart';
 import '../../core/services/api_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_widgets.dart';
+import '../../core/widgets/shimmer_widgets.dart' as shimmer;
 import '../../core/models/bank_account_model.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -343,21 +344,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                 padding: const EdgeInsets.all(16),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    const ShimmerCard(height: 120),
+                    shimmer.ShimmerCard(height: 120),
                     const SizedBox(height: 12),
                     Row(
-                      children: const [
-                        Expanded(child: ShimmerCard(height: 80)),
-                        SizedBox(width: 10),
-                        Expanded(child: ShimmerCard(height: 80)),
-                        SizedBox(width: 10),
-                        Expanded(child: ShimmerCard(height: 80)),
+                      children: [
+                        Expanded(child: shimmer.ShimmerCard(height: 80)),
+                        const SizedBox(width: 10),
+                        Expanded(child: shimmer.ShimmerCard(height: 80)),
+                        const SizedBox(width: 10),
+                        Expanded(child: shimmer.ShimmerCard(height: 80)),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    const ShimmerCard(height: 100),
+                    shimmer.ShimmerCard(height: 100),
                     const SizedBox(height: 12),
-                    const ShimmerCard(height: 80),
+                    shimmer.ShimmerCard(height: 80),
                   ]),
                 ),
               )

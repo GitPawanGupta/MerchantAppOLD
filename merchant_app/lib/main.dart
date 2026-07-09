@@ -7,6 +7,9 @@ import 'core/services/auth_service.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
+import 'screens/auth/otp_verification_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/reset_password_screen.dart';
 import 'screens/dashboard/home_shell.dart';
 import 'screens/qr/qr_list_screen.dart';
 import 'screens/qr/qr_detail_screen.dart';
@@ -22,12 +25,12 @@ import 'screens/profile/bank_details_screen.dart';
 import 'screens/profile/bank_accounts_screen.dart';
 import 'screens/profile/change_password_screen.dart';
 import 'screens/profile/edit_profile_screen.dart';
-import 'screens/profile/connect_razorpay_screen.dart';
 import 'screens/reports/reports_screen.dart';
 import 'screens/admin/admin_shell.dart';
 import 'screens/admin/admin_bank_accounts_screen.dart';
-import 'core/models/qr_model.dart';
 import 'screens/admin/admin_merchants_screen.dart';
+import 'screens/admin/admin_settlements_screen.dart';
+import 'core/models/qr_model.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -70,6 +73,22 @@ class MerchantApp extends StatelessWidget {
         return _slide(const LoginScreen());
       case '/register':
         return _slide(const RegisterScreen());
+      case '/forgot-password':
+        return _slide(const ForgotPasswordScreen());
+      case '/reset-password':
+        // Extract token from arguments
+        final token = settings.arguments as String? ?? '';
+        return _slide(ResetPasswordScreen(resetToken: token));
+      case '/otp-verification':
+        // Extract phone/email from arguments
+        final args = settings.arguments as Map<String, dynamic>? ?? {};
+        return _slide(
+          OTPVerificationScreen(
+            phone: args['phone'] ?? '',
+            email: args['email'],
+            verificationType: args['type'] ?? 'phone',
+          ),
+        );
 
       // ── Main app (merchant) ───────────────────────────────────────────────
       case '/home':
@@ -82,6 +101,8 @@ class MerchantApp extends StatelessWidget {
         return _slide(const AdminBankAccountsScreen());
       case '/admin/merchants':
         return _slide(const AdminMerchantsScreen());
+      case '/admin/settlements':
+        return _slide(const AdminSettlementsScreen());
       // ── QR ────────────────────────────────────────────────────────────────
       case '/qr-list':
         return _slide(const QRListScreen());
@@ -124,8 +145,6 @@ class MerchantApp extends StatelessWidget {
         return _slide(const BankAccountsScreen());
       case '/change-password':
         return _slide(const ChangePasswordScreen());
-      case '/connect-razorpay':
-        return _slide(const ConnectRazorpayScreen());
 
       default:
         return _slide(const LoginScreen());
@@ -202,7 +221,7 @@ class _SplashState extends State<_Splash> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'ISS Merchant',
+              'Ppay For Merchant',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 28,

@@ -18,10 +18,9 @@ const bankAccountSchema = new mongoose.Schema(
       enum: ['savings', 'current'],
       default: 'current',
     },
-    isPrimary: { type: Boolean, default: false },
+    isPrimary:  { type: Boolean, default: false },
     isVerified: { type: Boolean, default: false },
     verifiedAt: { type: Date },
-    cashfreeBeneficiaryId: { type: String },
   }
 );
 

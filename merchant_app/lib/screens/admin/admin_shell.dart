@@ -3,6 +3,7 @@ import '../../core/theme/app_theme.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_merchants_screen.dart';
 import 'admin_transactions_screen.dart';
+import 'admin_settlements_screen.dart';
 import 'admin_commission_screen.dart';
 import 'admin_reports_screen.dart';
 
@@ -19,22 +20,27 @@ class _AdminShellState extends State<AdminShell> {
     NavigationDestination(
       icon: Icon(Icons.dashboard_outlined),
       selectedIcon: Icon(Icons.dashboard),
-      label: 'Dashboard',
+      label: 'Home',
     ),
     NavigationDestination(
       icon: Icon(Icons.store_outlined),
       selectedIcon: Icon(Icons.store),
-      label: 'Merchants',
+      label: 'Stores',
     ),
     NavigationDestination(
       icon: Icon(Icons.receipt_long_outlined),
       selectedIcon: Icon(Icons.receipt_long),
-      label: 'Payments',
+      label: 'Txns',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.account_balance_outlined),
+      selectedIcon: Icon(Icons.account_balance),
+      label: 'Settle',
     ),
     NavigationDestination(
       icon: Icon(Icons.percent_outlined),
       selectedIcon: Icon(Icons.percent),
-      label: 'Commiss.',
+      label: 'Fees',
     ),
     NavigationDestination(
       icon: Icon(Icons.bar_chart_outlined),
@@ -47,6 +53,7 @@ class _AdminShellState extends State<AdminShell> {
     AdminDashboardScreen(),
     AdminMerchantsScreen(),
     AdminTransactionsScreen(),
+    AdminSettlementsScreen(),
     AdminCommissionScreen(),
     AdminReportsScreen(),
   ];

@@ -2,10 +2,12 @@ const reportingService = require('../services/reportingService');
 const { successResponse } = require('../utils/apiResponse');
 
 // ─── Merchant Reports ─────────────────────────────────────────────────────────
+// Admin reports are handled directly in adminController via reportingService.
+// This controller is for merchant-facing report endpoints only.
 
 /**
  * GET /api/reports/transactions
- * Merchant — own transaction report
+ * Merchant — own transaction report with daily breakdown
  */
 const merchantTransactionReport = async (req, res, next) => {
   try {
@@ -35,48 +37,7 @@ const merchantSettlementReport = async (req, res, next) => {
   }
 };
 
-// ─── Admin Reports ────────────────────────────────────────────────────────────
-
-/**
- * GET /api/admin/reports/transactions
- */
-const adminTransactionReport = async (req, res, next) => {
-  try {
-    const report = await reportingService.getAdminTransactionReport(req.query);
-    return successResponse(res, report);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * GET /api/admin/reports/commissions
- */
-const adminCommissionReport = async (req, res, next) => {
-  try {
-    const report = await reportingService.getAdminCommissionReport(req.query);
-    return successResponse(res, report);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * GET /api/admin/reports/settlements
- */
-const adminSettlementReport = async (req, res, next) => {
-  try {
-    const report = await reportingService.getAdminSettlementReport(req.query);
-    return successResponse(res, report);
-  } catch (error) {
-    next(error);
-  }
-};
-
 module.exports = {
   merchantTransactionReport,
   merchantSettlementReport,
-  adminTransactionReport,
-  adminCommissionReport,
-  adminSettlementReport,
 };

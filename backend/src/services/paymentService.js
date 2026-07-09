@@ -1,6 +1,5 @@
 const crypto = require('crypto');
-const { razorpayClient, RAZORPAY_CONFIG } = require('../config/razorpay');
-const partnerService = require('./partnerService');
+const paymentGatewayFactory = require('./gateways/PaymentGatewayFactory');
 const Transaction = require('../models/Transaction');
 const QRCodeModel = require('../models/QRCode');
 const Merchant = require('../models/Merchant');
@@ -35,7 +34,7 @@ const getEffectiveCommissionRate = async (merchantId, category = null) => {
 };
 
 /**
- * Create a Razorpay payment order.
+ * Create a payment order using active gateway.
  * Called when a customer lands on the payment page (after scanning QR).
  */
 const createPaymentOrder = async ({ qrId, amount, customerName, customerEmail, customerPhone }) => {
@@ -81,26 +80,43 @@ const createPaymentOrder = async ({ qrId, amount, customerName, customerEmail, c
   // 4. Generate internal order ID
   const orderId = generateOrderId('ORD');
 
-  // 5. Create order on Razorpay
-  // Razorpay amount is in paise (multiply by 100)
-  let rzpOrder;
+  // 5. Get active gateway and create order
+  const gateway = paymentGatewayFactory.getGateway();
+  const gatewayName = gateway.getName();
+  
+  let gatewayOrder;
   try {
-    rzpOrder = await razorpayClient.orders.create({
-      amount: Math.round(payAmount * 100), // paise
-      currency: 'INR',
-      receipt: orderId,
-      notes: {
-        merchantId: merchant._id.toString(),
-        qrId,
-        internalOrderId: orderId,
-      },
+    gatewayOrder = await gateway.createOrder({
+      amount: payAmount,
+      orderId,
+      customerPhone,
+      customerEmail,
+      customerName: customerName || 'Customer',
     });
-  } catch (rzpErr) {
-    const msg = rzpErr.error?.description || rzpErr.message;
-    logger.error(`Razorpay order creation failed: ${msg}`, rzpErr.error);
-    const err = new Error(`Payment gateway error: ${msg}`);
-    err.statusCode = 502;
-    throw err;
+  } catch (gwErr) {
+    logger.error(`${gatewayName} order creation failed: ${gwErr.message}`);
+    
+    // Attempt failover if enabled
+    if (paymentGatewayFactory.settings?.failoverEnabled) {
+      logger.warn(`Attempting failover from ${gatewayName}`);
+      const failedOver = await paymentGatewayFactory.attemptFailover();
+      
+      if (failedOver) {
+        // Retry with backup gateway
+        const backupGateway = paymentGatewayFactory.getGateway();
+        gatewayOrder = await backupGateway.createOrder({
+          amount: payAmount,
+          orderId,
+          customerPhone,
+          customerEmail,
+          customerName: customerName || 'Customer',
+        });
+      } else {
+        throw gwErr;
+      }
+    } else {
+      throw gwErr;
+    }
   }
 
   // 6. Persist transaction record
@@ -108,7 +124,7 @@ const createPaymentOrder = async ({ qrId, amount, customerName, customerEmail, c
     orderId,
     merchantId: merchant._id,
     qrCodeId: qr._id,
-    cfOrderId: rzpOrder.id,          // reusing cfOrderId field to store rzp order id
+    cfOrderId: gatewayOrder.gatewayOrderId,  // Gateway order ID (field name kept for DB compatibility)
     customerName: customerName || 'Customer',
     customerEmail,
     customerPhone,
@@ -118,29 +134,29 @@ const createPaymentOrder = async ({ qrId, amount, customerName, customerEmail, c
     settlementAmount,
     currency: 'INR',
     status: 'pending',
+    paymentGateway: gatewayName,  // Track which gateway was used
   });
 
-  logger.info(`Razorpay order created: ${orderId} (rzp: ${rzpOrder.id}) for merchant ${merchant.merchantId}`);
+  logger.info(`${gatewayName} order created: ${orderId} (gateway: ${gatewayOrder.gatewayOrderId}) for merchant ${merchant.merchantId}`);
 
   return {
     transaction,
-    rzpOrderId: rzpOrder.id,
-    // kept for backward compat with controller response fields
-    cfOrderId: rzpOrder.id,
-    paymentSessionId: null,           // not used in Razorpay flow
+    gatewayOrderId: gatewayOrder.gatewayOrderId,
     orderId,
     amount: payAmount,
     merchant: {
       businessName: merchant.businessName,
     },
+    gateway: gatewayName,
+    gatewayOrder, // Full gateway response for checkout
   };
 };
 
 /**
- * Verify payment status after Razorpay return redirect.
- * Razorpay sends razorpay_payment_id + razorpay_signature on success.
+ * Verify payment status after gateway return redirect.
+ * Gateway-specific verification based on transaction's payment gateway.
  */
-const verifyPaymentOrder = async (orderId, rzpPaymentId = null, rzpSignature = null) => {
+const verifyPaymentOrder = async (orderId, paymentId = null, signature = null) => {
   const transaction = await Transaction.findOne({ orderId }).populate(
     'merchantId',
     'merchantId businessName'
@@ -157,133 +173,114 @@ const verifyPaymentOrder = async (orderId, rzpPaymentId = null, rzpSignature = n
     return transaction;
   }
 
-  // If Razorpay returned payment details on redirect, verify signature
-  if (rzpPaymentId && rzpSignature) {
-    const rzpOrderId = transaction.cfOrderId; // stored rzp order id
-    const generated = crypto
-      .createHmac('sha256', RAZORPAY_CONFIG.keySecret)
-      .update(`${rzpOrderId}|${rzpPaymentId}`)
-      .digest('hex');
+  // Get gateway adapter (use transaction's gateway or current active)
+  const gatewayName = transaction.paymentGateway || paymentGatewayFactory.getGateway().getName();
+  const gateway = paymentGatewayFactory.getGatewayByName(gatewayName);
 
-    if (generated !== rzpSignature) {
-      transaction.status = 'failed';
-      transaction.failureReason = 'Invalid payment signature';
-      await transaction.save();
-      return transaction;
-    }
-
-    // Fetch payment details from Razorpay
-    let payment;
+  // If gateway returned payment details on redirect, verify
+  if (paymentId && signature) {
     try {
-      payment = await razorpayClient.payments.fetch(rzpPaymentId);
-    } catch (e) {
-      logger.error(`Razorpay payment fetch failed for ${rzpPaymentId}: ${e.message}`);
-      throw new Error('Failed to fetch payment status from gateway');
-    }
+      const verification = await gateway.verifyPayment({
+        orderId: transaction.cfOrderId, // Gateway order ID
+        paymentId,
+        signature,
+      });
 
-    await applyPaymentUpdate(transaction, payment);
+      if (!verification.isValid) {
+        transaction.status = 'failed';
+        transaction.failureReason = verification.error || 'Invalid payment signature';
+        await transaction.save();
+        return transaction;
+      }
+
+      // Apply payment update
+      await applyPaymentUpdate(transaction, verification);
+    } catch (e) {
+      logger.error(`${gatewayName} payment verification failed for ${paymentId}: ${e.message}`);
+      throw new Error(`Failed to verify payment with ${gatewayName}: ${e.message}`);
+    }
   } else {
     // No payment id yet — still pending
-    logger.info(`verifyPaymentOrder: no rzpPaymentId for ${orderId}, still pending`);
+    logger.info(`verifyPaymentOrder: no payment ID for ${orderId}, still pending`);
   }
 
   return transaction;
 };
 
 /**
- * Process Razorpay webhook
- * Razorpay sends: x-razorpay-signature header, JSON body
+ * Process payment gateway webhook
+ * Auto-detects gateway from headers/signature and routes to appropriate adapter
  */
-const processWebhook = async (rawBody, signature, payload) => {
-  // Verify webhook signature
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || process.env.CASHFREE_WEBHOOK_SECRET;
-  if (secret) {
-    const generated = crypto
-      .createHmac('sha256', secret)
-      .update(rawBody)
-      .digest('hex');
-
-    if (generated !== signature) {
-      const err = new Error('Invalid webhook signature');
-      err.statusCode = 401;
-      throw err;
-    }
+const processWebhook = async (rawBody, headers, payload) => {
+  // Detect gateway from headers
+  let gatewayName = 'razorpay'; // default
+  
+  if (headers['x-webhook-signature']) {
+    gatewayName = 'cashfree';
+  } else if (headers['x-razorpay-signature']) {
+    gatewayName = 'razorpay';
   }
 
-  const event = payload.event;
-
-  // Handle only payment events
-  const handled = [
-    'payment.captured',
-    'payment.failed',
-    'order.paid',
-  ];
-
-  if (!handled.includes(event)) {
-    logger.info(`Razorpay webhook ignored: ${event}`);
-    return { ignored: true };
+  // Get appropriate gateway adapter
+  const gateway = paymentGatewayFactory.getGatewayByName(gatewayName);
+  
+  // Process webhook through adapter
+  let webhookResult;
+  try {
+    webhookResult = await gateway.processWebhook(rawBody, headers, payload);
+  } catch (err) {
+    logger.error(`${gatewayName} webhook processing error: ${err.message}`);
+    throw err;
   }
 
-  // Extract payment object
-  const payment = payload.payload?.payment?.entity || payload.payload?.order?.entity;
-  const rzpOrderId = payment?.order_id || payload.payload?.order?.entity?.id;
-
-  if (!rzpOrderId) {
-    logger.warn('Razorpay webhook: no order_id found in payload');
-    return { ignored: true };
+  if (!webhookResult.isValid) {
+    logger.warn(`${gatewayName} webhook validation failed`);
+    return webhookResult;
   }
 
-  // Find transaction by rzp order id (stored in cfOrderId field)
-  const transaction = await Transaction.findOne({ cfOrderId: rzpOrderId });
+  // Find transaction by gateway order ID
+  const transaction = await Transaction.findOne({ cfOrderId: webhookResult.orderId });
   if (!transaction) {
-    logger.warn(`Razorpay webhook: transaction not found for rzp order ${rzpOrderId}`);
-    return { ignored: true };
+    logger.warn(`${gatewayName} webhook: transaction not found for order ${webhookResult.orderId}`);
+    return { ignored: true, reason: 'Transaction not found' };
   }
 
   // Idempotency — skip if already processed
   if (['success', 'failed', 'cancelled'].includes(transaction.status)) {
-    logger.info(`Razorpay webhook: transaction ${transaction.orderId} already in terminal state`);
+    logger.info(`${gatewayName} webhook: transaction ${transaction.orderId} already in terminal state`);
     return { alreadyProcessed: true };
   }
 
-  await applyPaymentUpdate(transaction, payment?.entity || payment, payload);
+  await applyPaymentUpdate(transaction, webhookResult);
 
-  logger.info(`Razorpay webhook processed: ${transaction.orderId} → ${transaction.status}`);
+  logger.info(`${gatewayName} webhook processed: ${transaction.orderId} → ${transaction.status}`);
   return { processed: true, orderId: transaction.orderId, status: transaction.status };
 };
 
 /**
- * Shared logic: update transaction from a Razorpay payment object
+ * Shared logic: update transaction from normalized payment data (from any gateway)
  */
-const applyPaymentUpdate = async (transaction, payment, webhookPayload = null) => {
-  if (!payment) return;
+const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = null) => {
+  if (!paymentData) return;
 
-  // Razorpay statuses: captured → success, failed → failed, created/authorized → pending
-  const rzpStatus = payment.status;
-  let internalStatus = transaction.status;
-
-  if (rzpStatus === 'captured') internalStatus = 'success';
-  else if (rzpStatus === 'failed') internalStatus = 'failed';
-  else if (rzpStatus === 'refunded') internalStatus = 'failed';
-  else internalStatus = 'pending';
+  // paymentData is normalized from gateway adapter
+  const internalStatus = paymentData.status || 'pending';
 
   transaction.status = internalStatus;
-  transaction.cfPaymentId = payment.id || transaction.cfPaymentId;       // razorpay payment id
-  transaction.cfReferenceId = payment.acquirer_data?.bank_transaction_id  // bank ref
-    || payment.bank_transaction_id
-    || transaction.cfReferenceId;
-  transaction.paymentMethod = resolvePaymentMethod(payment.method);
-  transaction.paymentInstrument = payment.method || null;
-  transaction.upiTransactionId = payment.vpa || null;                     // UPI VPA
-  transaction.paymentTime = payment.captured_at
-    ? new Date(payment.captured_at * 1000)
-    : new Date();
-  transaction.failureReason = payment.error_description || payment.description || null;
-  if (webhookPayload) transaction.webhookData = webhookPayload;
+  transaction.cfPaymentId = paymentData.paymentId || transaction.cfPaymentId;
+  transaction.cfReferenceId = paymentData.bankTransactionId || transaction.cfReferenceId;
+  transaction.paymentMethod = resolvePaymentMethod(paymentData.method);
+  transaction.paymentInstrument = paymentData.method || null;
+  transaction.upiTransactionId = paymentData.vpa || null;
+  transaction.paymentTime = paymentData.capturedAt || new Date();
+  transaction.failureReason = paymentData.errorDescription || null;
+  if (webhookPayload || paymentData.rawPayload) {
+    transaction.webhookData = webhookPayload || paymentData.rawPayload;
+  }
 
   await transaction.save();
 
-  // On success — update merchant totals and QR stats, then route payment
+  // On success — update merchant totals and QR stats
   if (internalStatus === 'success') {
     await Promise.all([
       Merchant.findByIdAndUpdate(transaction.merchantId, {

@@ -27,7 +27,7 @@ const createOrder = async (req, res, next) => {
     const result = await paymentService.createPaymentOrder({ qrId, amount, customerName, customerEmail, customerPhone });
     return successResponse(res, {
       orderId: result.orderId,
-      rzpOrderId: result.rzpOrderId,
+      rzpOrderId: result.gatewayOrderId, // Use gatewayOrderId from service
       amount: result.amount,
       merchant: result.merchant,
     }, 'Payment order created', 201);

@@ -147,10 +147,14 @@ async function go(){
       theme:{color:'${BRAND}'},
       handler:function(p){
         setStatus('Verifying payment...','Almost done!',false);
+        console.log('Razorpay payment response:', p);
+        var pid = p.razorpay_payment_id || '';
+        var roid = p.razorpay_order_id || '';
+        var sig = p.razorpay_signature || '';
         location.replace('/api/payment/return?order_id='+oid
-          +'&razorpay_payment_id='+p.razorpay_payment_id
-          +'&razorpay_order_id='+p.razorpay_order_id
-          +'&razorpay_signature='+p.razorpay_signature);},
+          +'&razorpay_payment_id='+pid
+          +'&razorpay_order_id='+roid
+          +'&razorpay_signature='+sig);},
       modal:{
         ondismiss:function(){
           setStatus('Payment cancelled','Tap "Try Again" to retry',true);},
@@ -397,10 +401,15 @@ async function pay(){
         setLoading(true);
         document.getElementById('btxt').style.display='none';
         document.getElementById('sp').style.display='block';
+        // Log payment response for debugging
+        console.log('Razorpay payment response:', p);
+        var pid = p.razorpay_payment_id || '';
+        var roid = p.razorpay_order_id || '';
+        var sig = p.razorpay_signature || '';
         location.replace('/api/payment/return?order_id='+oid
-          +'&razorpay_payment_id='+p.razorpay_payment_id
-          +'&razorpay_order_id='+p.razorpay_order_id
-          +'&razorpay_signature='+p.razorpay_signature);},
+          +'&razorpay_payment_id='+pid
+          +'&razorpay_order_id='+roid
+          +'&razorpay_signature='+sig);},
       modal:{
         ondismiss:function(){setLoading(false);toast('Payment cancelled');},
         animation:true,backdropclose:false}

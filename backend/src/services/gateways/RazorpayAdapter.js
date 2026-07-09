@@ -147,13 +147,19 @@ class RazorpayAdapter extends IGatewayAdapter {
           .digest('hex');
 
         if (generated !== signature) {
-          logger.warn('Razorpay webhook signature verification failed');
+          logger.warn(`Razorpay webhook signature verification failed`);
+          logger.warn(`Expected: ${generated}`);
+          logger.warn(`Received: ${signature}`);
+          logger.warn(`RawBody type: ${typeof rawBody}, length: ${rawBody?.length || 0}`);
           return {
             gateway: 'razorpay',
             isValid: false,
             error: 'Invalid webhook signature',
           };
         }
+        logger.info('Razorpay webhook signature verified successfully');
+      } else {
+        logger.warn('Razorpay webhook secret not configured - skipping signature verification');
       }
 
       const event = payload.event;

@@ -451,7 +451,7 @@ const updateTransactionStatus = async (req, res, next) => {
       `Merchant: ${tx.merchantId.merchantId}. Notes: ${notes || 'N/A'}`
     );
 
-    // If marking as success, update merchant balance
+    // If marking as success, update merchant balance and create commission ledger entry
     if (status === 'success' && oldStatus !== 'success') {
       await Merchant.findByIdAndUpdate(tx.merchantId._id, {
         $inc: { 
@@ -460,6 +460,19 @@ const updateTransactionStatus = async (req, res, next) => {
           totalCommission: tx.commissionAmount
         },
         lastTransactionDate: new Date(),
+      });
+
+      // Create commission ledger entry
+      const { CommissionLedger } = require('../models/Commission');
+      await CommissionLedger.create({
+        transactionId: tx._id,
+        merchantId: tx.merchantId._id,
+        transactionAmount: tx.amount,
+        commissionRate: tx.commissionRate,
+        flatFee: 0,
+        commissionAmount: tx.commissionAmount,
+        netSettlementAmount: tx.settlementAmount,
+        status: 'pending',
       });
 
       logger.info(

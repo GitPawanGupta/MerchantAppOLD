@@ -326,6 +326,7 @@ const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = nul
             // No linked account — use manual settlement queue
             logger.info(`Merchant ${merchant.merchantId} not linked to Razorpay Partner — queuing for manual settlement`);
           }
+        }
       } catch (e) {
         logger.error(`Route transfer failed for tx ${transaction.orderId}: ${e.message}`);
       }

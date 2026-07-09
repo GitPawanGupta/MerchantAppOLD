@@ -170,22 +170,14 @@ const manualMerchantSettlement = async (merchantId, bankAccountId) => {
     initiatedAt: new Date(),
   });
 
-  // Mark transactions settled
+  // Link transactions to settlement (but keep isSettled=false until admin approves)
   await Transaction.updateMany(
     { _id: { $in: transactions.map((t) => t._id) } },
-    { isSettled: true, settledAt: new Date(), settlementId: settlement._id }
+    { settlementId: settlement._id }
   );
 
   // Record commission ledger entries
   await commissionService.recordCommissionLedger(transactions, settlement._id);
-
-  // Update merchant running balance
-  await Merchant.findByIdAndUpdate(merchantId, {
-    $inc: {
-      totalSettled: netAmount,
-      pendingSettlement: -netAmount,
-    },
-  });
 
   logger.info(
     `Manual settlement ${settlementRef} requested: ₹${netAmount} for merchant ${merchant.merchantId}, bank: ${bankAccount.accountNumber}`
@@ -433,6 +425,23 @@ const updateSettlementStatus = async (settlementRef, updates, adminId) => {
 
   if (status === 'success') {
     settlement.completedAt = new Date();
+    
+    // Mark transactions as settled and update merchant balance
+    await Transaction.updateMany(
+      { _id: { $in: settlement.transactions } },
+      { isSettled: true, settledAt: new Date() }
+    );
+    
+    // Update merchant running balance (only if not already updated)
+    if (!settlement.isBalanceUpdated) {
+      await Merchant.findByIdAndUpdate(settlement.merchantId, {
+        $inc: {
+          totalSettled: settlement.netAmount,
+          pendingSettlement: -settlement.netAmount,
+        },
+      });
+      settlement.isBalanceUpdated = true;
+    }
   }
 
   if (status === 'failed') {

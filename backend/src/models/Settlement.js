@@ -92,6 +92,12 @@ const settlementSchema = new mongoose.Schema(
     payoutResponse: {
       type: mongoose.Schema.Types.Mixed,
     },
+
+    // Flag to track if merchant balance was updated (prevent double-update)
+    isBalanceUpdated: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

@@ -205,9 +205,15 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
                               color: AppTheme.textSecondary,
                             ),
                             SizedBox(width: 12),
-                            Text(
-                              'Select Merchant',
-                              style: TextStyle(color: AppTheme.textSecondary),
+                            Expanded(
+                              child: Text(
+                                'Select Merchant',
+                                style: TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),
@@ -232,70 +238,68 @@ class _AdminCommissionScreenState extends State<AdminCommissionScreen>
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
-                              vertical: 8,
+                              vertical: 6,
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
+                            child: Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
                                         businessName,
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w600,
-                                          fontSize: 14,
+                                          fontSize: 13,
                                         ),
                                         overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
                                       ),
-                                    ),
-                                    if (status == 'active')
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        merchantId,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: AppTheme.textSecondary,
+                                          fontFamily: 'monospace',
                                         ),
-                                        decoration: BoxDecoration(
-                                          color: AppTheme.accent.withValues(
-                                            alpha: 0.1,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                        ),
-                                        child: const Text(
-                                          'ACTIVE',
-                                          style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppTheme.accent,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  children: [
-                                    Text(
-                                      merchantId,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AppTheme.textSecondary,
-                                        fontFamily: 'monospace',
-                                      ),
-                                    ),
-                                    if (kycStatus == 'approved') ...[
-                                      const SizedBox(width: 6),
-                                      const Icon(
-                                        Icons.verified,
-                                        size: 12,
-                                        color: AppTheme.accent,
                                       ),
                                     ],
-                                  ],
+                                  ),
                                 ),
+                                if (status == 'active') ...[
+                                  const SizedBox(width: 4),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.accent.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                    child: const Text(
+                                      'ACTIVE',
+                                      style: TextStyle(
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.accent,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                if (kycStatus == 'approved') ...[
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.verified,
+                                    size: 14,
+                                    color: AppTheme.accent,
+                                  ),
+                                ],
                               ],
                             ),
                           ),

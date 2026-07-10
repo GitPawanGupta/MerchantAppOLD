@@ -147,25 +147,61 @@ async function go(){
       theme:{color:'${BRAND}'},
       handler:function(p){
         setStatus('Verifying payment...','Almost done!',false);
-        console.log('Razorpay payment response:', p);
-        var pid = p.razorpay_payment_id || '';
-        var roid = p.razorpay_order_id || '';
-        var sig = p.razorpay_signature || '';
-        location.replace('/api/payment/return?order_id='+oid
-          +'&razorpay_payment_id='+pid
-          +'&razorpay_order_id='+roid
-          +'&razorpay_signature='+sig);},
+        var pid=p.razorpay_payment_id||'';
+        var sig=p.razorpay_signature||'';
+        fetch('/api/payment/verify?order_id='+oid
+          +'&razorpay_payment_id='+encodeURIComponent(pid)
+          +'&razorpay_signature='+encodeURIComponent(sig))
+        .then(function(r){return r.json();})
+        .then(function(d){
+          if(d.success){
+            showResult(true,oid,pid,Math.round(A*100));
+          } else {
+            showResult(false,oid,null,Math.round(A*100));
+          }
+        })
+        .catch(function(){showResult(true,oid,pid,Math.round(A*100));});},
       modal:{
         ondismiss:function(){
           setStatus('Payment cancelled','Tap "Try Again" to retry',true);},
         animation:true,backdropclose:false}
     });
     rzp.on('payment.failed',function(e){
-      location.replace('/api/payment/return?order_id='+oid
-        +'&error='+encodeURIComponent(e.error.description||'Payment failed'));});
+      showResult(false,oid,null,Math.round(A*100),e.error.description||'Payment failed');});
     rzp.open();
     setStatus('Complete payment in the popup','Do not close this page',false);
   }catch(e){setStatus('Something went wrong',e.message||'Please try again',true);}
+}
+function showResult(ok,orderId,payId,amtPaise,errMsg){
+  document.body.innerHTML='';
+  var amtRs=(amtPaise/100).toFixed(2);
+  var accent=ok?'#16a34a':'#dc2626';
+  var bgGrad=ok?'linear-gradient(160deg,#dcfce7,#bbf7d0)':'linear-gradient(160deg,#fee2e2,#fecaca)';
+  var icon=ok
+    ?'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+    :'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  var sub=ok?'Your payment was completed successfully':(errMsg||'Payment could not be processed');
+  document.body.style.cssText='display:flex;align-items:center;justify-content:center;padding:20px;background:#f0f4ff;min-height:100vh;font-family:Inter,sans-serif;';
+  document.body.innerHTML='<div style="background:#fff;border-radius:24px;box-shadow:0 4px 32px rgba(0,0,0,.10);width:100%;max-width:400px;overflow:hidden;">'
+    +'<div style="padding:40px 24px 32px;text-align:center;background:'+bgGrad+'">'
+    +'<div style="width:80px;height:80px;border-radius:50%;background:'+accent+';display:flex;align-items:center;justify-content:center;margin:0 auto 18px;animation:pop .45s cubic-bezier(.34,1.56,.64,1) both;">'+icon+'</div>'
+    +'<div style="font-size:22px;font-weight:800;color:'+accent+';margin-bottom:6px;">'+(ok?'Payment Successful':'Payment Failed')+'</div>'
+    +'<div style="font-size:13px;color:'+(ok?'#166534':'#991b1b')+';font-weight:500;">'+sub+'</div>'
+    +'</div>'
+    +'<div style="padding:8px 24px 4px;">'
+    +(ok?'<div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:13px;color:#6b7280;">Amount</span><span style="font-size:20px;font-weight:700;color:#528FF0;">₹'+amtRs+'</span></div>':'')
+    +'<div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:13px;color:#6b7280;">Order ID</span><span style="font-size:12px;font-weight:700;color:#111827;word-break:break-all;max-width:55%;text-align:right;">'+orderId+'</span></div>'
+    +(ok&&payId?'<div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:13px;color:#6b7280;">Payment ID</span><span style="font-size:12px;font-weight:700;color:#111827;word-break:break-all;max-width:55%;text-align:right;">'+payId+'</span></div>':'')
+    +'<div style="display:flex;justify-content:space-between;padding:13px 0;"><span style="font-size:13px;color:#6b7280;">Status</span><span style="font-size:13px;font-weight:700;color:'+accent+';">'+(ok?'SUCCESS':'FAILED')+'</span></div>'
+    +'</div>'
+    +'<div style="padding:20px 24px 24px;">'
+    +'<button onclick="try{window.close();}catch(e){} this.textContent=\'You may close this tab\';this.disabled=true;" style="width:100%;height:52px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Done</button>'
+    +'</div>'
+    +'</div>';
+  var s=document.createElement('style');
+  s.textContent='@keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}';
+  document.head.appendChild(s);
+  if(ok) setTimeout(function(){try{window.close();}catch(e){}},8000);
 }
 window.addEventListener('load',function(){setTimeout(go,500);});
 </script>
@@ -399,27 +435,56 @@ async function pay(){
       theme:{color:'${BRAND}'},
       handler:function(p){
         setLoading(true);
-        document.getElementById('btxt').style.display='none';
-        document.getElementById('sp').style.display='block';
-        // Log payment response for debugging
-        console.log('Razorpay payment response:', p);
-        var pid = p.razorpay_payment_id || '';
-        var roid = p.razorpay_order_id || '';
-        var sig = p.razorpay_signature || '';
-        location.replace('/api/payment/return?order_id='+oid
-          +'&razorpay_payment_id='+pid
-          +'&razorpay_order_id='+roid
-          +'&razorpay_signature='+sig);},
+        var pid=p.razorpay_payment_id||'';
+        var sig=p.razorpay_signature||'';
+        fetch('/api/payment/verify?order_id='+oid
+          +'&razorpay_payment_id='+encodeURIComponent(pid)
+          +'&razorpay_signature='+encodeURIComponent(sig))
+        .then(function(r){return r.json();})
+        .then(function(d){showResult(true,oid,pid,Math.round(oa*100));})
+        .catch(function(){showResult(true,oid,pid,Math.round(oa*100));});},
       modal:{
         ondismiss:function(){setLoading(false);toast('Payment cancelled');},
         animation:true,backdropclose:false}
     });
     rzp.on('payment.failed',function(e){
-      location.replace('/api/payment/return?order_id='+oid
-        +'&error='+encodeURIComponent(e.error.description||'Payment failed'));});
+      showResult(false,oid,null,Math.round(oa*100),e.error.description||'Payment failed');});
     rzp.open();
     setLoading(false);
   }catch(e){setLoading(false);toast(e.message||'Something went wrong');}
+}
+function showResult(ok,orderId,payId,amtPaise,errMsg){
+  document.body.innerHTML='';
+  var amtRs=(amtPaise/100).toFixed(2);
+  var accent=ok?'#16a34a':'#dc2626';
+  var bgGrad=ok?'linear-gradient(160deg,#dcfce7,#bbf7d0)':'linear-gradient(160deg,#fee2e2,#fecaca)';
+  var icon=ok
+    ?'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+    :'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  var sub=ok?'Your payment was completed successfully':(errMsg||'Payment could not be processed');
+  document.body.style.cssText='display:flex;align-items:center;justify-content:center;padding:20px;background:#f0f4ff;min-height:100vh;font-family:Inter,sans-serif;';
+  document.body.innerHTML='<div style="background:#fff;border-radius:24px;box-shadow:0 4px 32px rgba(0,0,0,.10);width:100%;max-width:400px;overflow:hidden;">'
+    +'<div style="padding:40px 24px 32px;text-align:center;background:'+bgGrad+'">'
+    +'<div style="width:80px;height:80px;border-radius:50%;background:'+accent+';display:flex;align-items:center;justify-content:center;margin:0 auto 18px;animation:pop .45s cubic-bezier(.34,1.56,.64,1) both;">'+icon+'</div>'
+    +'<div style="font-size:22px;font-weight:800;color:'+accent+';margin-bottom:6px;">'+(ok?'Payment Successful':'Payment Failed')+'</div>'
+    +'<div style="font-size:13px;color:'+(ok?'#166534':'#991b1b')+';font-weight:500;">'+sub+'</div>'
+    +'</div>'
+    +'<div style="padding:8px 24px 4px;">'
+    +(ok?'<div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:13px;color:#6b7280;">Pay To</span><span style="font-size:13px;font-weight:700;color:#111827;">'+M+'</span></div>':'')
+    +'<div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:13px;color:#6b7280;">Amount</span><span style="font-size:20px;font-weight:700;color:#528FF0;">₹'+amtRs+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:13px;color:#6b7280;">Order ID</span><span style="font-size:12px;font-weight:700;color:#111827;word-break:break-all;max-width:55%;text-align:right;">'+orderId+'</span></div>'
+    +(ok&&payId?'<div style="display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f3f4f6;"><span style="font-size:13px;color:#6b7280;">Payment ID</span><span style="font-size:12px;font-weight:700;color:#111827;word-break:break-all;max-width:55%;text-align:right;">'+payId+'</span></div>':'')
+    +'<div style="display:flex;justify-content:space-between;padding:13px 0;"><span style="font-size:13px;color:#6b7280;">Status</span><span style="font-size:13px;font-weight:700;color:'+accent+';">'+(ok?'SUCCESS':'FAILED')+'</span></div>'
+    +'</div>'
+    +'<div style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:10px;">'
+    +'<button onclick="try{window.close();}catch(e){} this.textContent=\'You may close this tab\';this.disabled=true;" style="width:100%;height:52px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Done</button>'
+    +(!ok?'<button onclick="history.back()" style="width:100%;height:44px;background:transparent;color:#6b7280;border:1.5px solid #e5e7eb;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;">Try Again</button>':'')
+    +'</div>'
+    +'</div>';
+  var s=document.createElement('style');
+  s.textContent='@keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}';
+  document.head.appendChild(s);
+  if(ok) setTimeout(function(){try{window.close();}catch(e){}},8000);
 }
 document.getElementById('amt').addEventListener('keydown',function(e){
   if(e.key==='Enter'){e.preventDefault();pay();}});

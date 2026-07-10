@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/services/api_service.dart';
+import '../../core/theme/app_theme.dart';
 
 class AdminGatewayScreen extends StatefulWidget {
   const AdminGatewayScreen({super.key});
@@ -14,6 +15,8 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
   String _activeGateway = '';
   bool _isSwitching = false;
   final Map<String, bool> _testingGateways = {};
+  final Map<String, bool?> _statusResults =
+      {}; // null=unknown, true=ok, false=fail
 
   @override
   void initState() {
@@ -40,14 +43,62 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
     }
   }
 
-  Future<void> _switchGateway(String gateway) async {
+  Future<void> _switchGateway(String gateway, String displayName) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Switch Payment Gateway'),
-        content: Text(
-          'Are you sure you want to switch to ${gateway.toUpperCase()}?\n\n'
-          'All new payments will be processed through this gateway.',
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.swap_horiz_rounded,
+                color: Colors.orange,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Switch Gateway',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Activate $displayName as the payment gateway?',
+              style: const TextStyle(fontSize: 14, color: Color(0xFF334155)),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.amber, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'All new payments will go through this gateway immediately.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF78350F)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -56,8 +107,14 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            child: const Text('Switch Gateway'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text('Yes, Switch'),
           ),
         ],
       ),
@@ -78,7 +135,7 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
             (gw as Map<String, dynamic>)['isActive'] = gw['name'] == gateway;
           }
         });
-        _showSuccess('Payment gateway switched to ${gateway.toUpperCase()}');
+        _showSuccess('Switched to $displayName successfully');
       } else {
         _showError(
           response['message'] as String? ?? 'Failed to switch gateway',
@@ -91,8 +148,11 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
     }
   }
 
-  Future<void> _testGateway(String gateway) async {
-    setState(() => _testingGateways[gateway] = true);
+  Future<void> _checkStatus(String gateway) async {
+    setState(() {
+      _testingGateways[gateway] = true;
+      _statusResults[gateway] = null;
+    });
     try {
       final response = await ApiService.post('/admin/gateways/test', {
         'gateway': gateway,
@@ -100,20 +160,22 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
 
       if (response['success'] == true) {
         final result = response['data'] as Map<String, dynamic>;
-        if (result['success'] == true) {
-          _showSuccess(
-            '${(result['gateway'] as String).toUpperCase()} connection successful!',
-          );
+        final ok = result['success'] == true;
+        setState(() => _statusResults[gateway] = ok);
+        if (ok) {
+          _showSuccess('${gateway.toUpperCase()} is reachable and working');
         } else {
           _showError(
-            '${(result['gateway'] as String).toUpperCase()} test failed: ${result['message']}',
+            '${gateway.toUpperCase()} check failed: ${result['message']}',
           );
         }
       } else {
-        _showError(response['message'] as String? ?? 'Test failed');
+        setState(() => _statusResults[gateway] = false);
+        _showError(response['message'] as String? ?? 'Check failed');
       }
     } catch (e) {
-      _showError('Error testing gateway: $e');
+      setState(() => _statusResults[gateway] = false);
+      _showError('Error checking status: $e');
     } finally {
       if (mounted) setState(() => _testingGateways[gateway] = false);
     }
@@ -123,9 +185,16 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.green.shade600,
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -134,9 +203,16 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade600,
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     );
   }
@@ -144,10 +220,15 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9),
       appBar: AppBar(
-        title: const Text('Payment Gateway Settings'),
-        backgroundColor: Colors.indigo,
+        title: const Text(
+          'Payment Gateway',
+          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+        ),
+        backgroundColor: AppTheme.primaryDark,
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -156,84 +237,165 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Info card
-                  Card(
-                    color: Colors.blue.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline, color: Colors.blue.shade700),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'Select which payment gateway to use for '
-                              'processing transactions. Only one gateway '
-                              'can be active at a time.',
-                              style: TextStyle(
-                                color: Colors.blue.shade900,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
+                  // ── Active gateway hero card ──────────────────────
+                  _buildActiveHeroCard(),
+                  const SizedBox(height: 20),
+
+                  // ── Section title ─────────────────────────────────
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4, bottom: 12),
+                    child: Text(
+                      'Available Gateways',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF64748B),
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
 
-                  // Active gateway indicator
+                  // ── Gateway cards ─────────────────────────────────
+                  for (final gateway in _gateways)
+                    _buildGatewayCard(gateway as Map<String, dynamic>),
+
+                  const SizedBox(height: 12),
+
+                  // ── Info note ─────────────────────────────────────
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade50,
+                      color: Colors.blue.shade50,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.shade200),
+                      border: Border.all(color: Colors.blue.shade100),
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Icon(
-                          Icons.check_circle,
-                          color: Colors.green.shade700,
-                          size: 28,
+                          Icons.info_outline,
+                          color: Colors.blue.shade400,
+                          size: 18,
                         ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Currently Active',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.black54,
-                              ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Only one gateway is active at a time. '
+                            'Switching takes effect immediately for all new payments. '
+                            'Use "Check Status" to verify gateway connectivity.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.blue.shade800,
+                              height: 1.5,
                             ),
-                            Text(
-                              _activeGateway.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green.shade900,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
-
-                  const Text(
-                    'Available Payment Gateways',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-
-                  for (final gateway in _gateways)
-                    _buildGatewayCard(gateway as Map<String, dynamic>),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildActiveHeroCard() {
+    final name = _activeGateway;
+    final displayName = name.isEmpty
+        ? '—'
+        : name[0].toUpperCase() + name.substring(1);
+    final isRazorpay = name == 'razorpay';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isRazorpay
+              ? [const Color(0xFF1A237E), const Color(0xFF3949AB)]
+              : [const Color(0xFF1B5E20), const Color(0xFF388E3C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: (isRazorpay ? Colors.indigo : Colors.green).withValues(
+              alpha: 0.35,
+            ),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              isRazorpay
+                  ? Icons.payment_rounded
+                  : Icons.account_balance_rounded,
+              color: Colors.white,
+              size: 28,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Active Gateway',
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  displayName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.4)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.circle, color: Colors.greenAccent, size: 8),
+                SizedBox(width: 6),
+                Text(
+                  'LIVE',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -242,77 +404,139 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
     final displayName = gateway['displayName'] as String;
     final isActive = gateway['isActive'] as bool;
     final isTesting = _testingGateways[name] ?? false;
+    final statusResult = _statusResults[name]; // null/true/false
+    final isRazorpay = name == 'razorpay';
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: isActive ? 4 : 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isActive ? Colors.green.shade300 : Colors.grey.shade200,
+    final primaryColor = isRazorpay
+        ? const Color(0xFF3949AB)
+        : const Color(0xFF2E7D32);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isActive
+              ? primaryColor.withValues(alpha: 0.5)
+              : const Color(0xFFE2E8F0),
           width: isActive ? 2 : 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      child: Column(
+        children: [
+          // ── Card header ────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Row(
               children: [
-                // Gateway icon
+                // Gateway logo area
                 Container(
-                  width: 50,
-                  height: 50,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     color: isActive
-                        ? Colors.green.shade100
-                        : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
+                        ? primaryColor.withValues(alpha: 0.1)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    name == 'razorpay' ? Icons.payment : Icons.account_balance,
-                    color: isActive
-                        ? Colors.green.shade700
-                        : Colors.grey.shade600,
-                    size: 28,
+                    isRazorpay
+                        ? Icons.payment_rounded
+                        : Icons.account_balance_rounded,
+                    color: isActive ? primaryColor : const Color(0xFF94A3B8),
+                    size: 26,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
 
-                // Gateway name and status
+                // Name + status
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         displayName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: isActive
+                              ? primaryColor
+                              : const Color(0xFF1E293B),
                         ),
                       ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
+                          // Online/offline dot
                           Container(
-                            width: 8,
-                            height: 8,
+                            width: 7,
+                            height: 7,
                             decoration: BoxDecoration(
-                              color: isActive ? Colors.green : Colors.grey,
+                              color: isActive
+                                  ? Colors.green.shade500
+                                  : const Color(0xFFCBD5E1),
                               shape: BoxShape.circle,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
                           Text(
                             isActive ? 'Active' : 'Inactive',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 12,
                               color: isActive
-                                  ? Colors.green.shade700
-                                  : Colors.grey.shade600,
+                                  ? Colors.green.shade600
+                                  : const Color(0xFF94A3B8),
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
+                          // Status check result badge
+                          if (statusResult != null) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusResult
+                                    ? Colors.green.shade50
+                                    : Colors.red.shade50,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    statusResult
+                                        ? Icons.check_circle_outline
+                                        : Icons.cancel_outlined,
+                                    size: 11,
+                                    color: statusResult
+                                        ? Colors.green.shade600
+                                        : Colors.red.shade600,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    statusResult ? 'Reachable' : 'Unreachable',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: statusResult
+                                          ? Colors.green.shade700
+                                          : Colors.red.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],
@@ -323,80 +547,141 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
                 if (isActive)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+                      horizontal: 10,
+                      vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade100,
+                      color: primaryColor,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(
+                    child: const Text(
                       'ACTIVE',
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green.shade900,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
               ],
             ),
+          ),
 
-            const SizedBox(height: 16),
+          // ── Divider ────────────────────────────────────────────
+          const Divider(height: 1, color: Color(0xFFF1F5F9)),
 
-            // Action buttons
-            Row(
+          // ── Action buttons ─────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Row(
               children: [
-                // Test connection button
+                // Check Status button
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: isTesting ? null : () => _testGateway(name),
+                    onPressed: isTesting ? null : () => _checkStatus(name),
                     icon: isTesting
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                        ? SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: primaryColor,
+                            ),
                           )
-                        : const Icon(Icons.wifi_tethering, size: 18),
-                    label: Text(isTesting ? 'Checking...' : 'Check Status'),
+                        : Icon(
+                            Icons.wifi_tethering_rounded,
+                            size: 16,
+                            color: primaryColor,
+                          ),
+                    label: Text(
+                      isTesting ? 'Checking...' : 'Check Status',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: primaryColor,
+                      ),
+                    ),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.blue,
-                      side: const BorderSide(color: Colors.blue),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      side: BorderSide(
+                        color: primaryColor.withValues(alpha: 0.4),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
 
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
 
                 // Activate button
                 Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: (isActive || _isSwitching)
-                        ? null
-                        : () => _switchGateway(name),
-                    icon: (_isSwitching && !isActive)
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
+                  child: isActive
+                      ? OutlinedButton.icon(
+                          onPressed: null,
+                          icon: const Icon(
+                            Icons.check_circle_rounded,
+                            size: 16,
+                          ),
+                          label: const Text(
+                            'Activated',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
-                          )
-                        : const Icon(Icons.power_settings_new, size: 18),
-                    label: Text(isActive ? 'Active' : 'Activate'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isActive ? Colors.green : Colors.orange,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            foregroundColor: Colors.green.shade600,
+                            side: BorderSide(color: Colors.green.shade200),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        )
+                      : ElevatedButton.icon(
+                          onPressed: _isSwitching
+                              ? null
+                              : () => _switchGateway(name, displayName),
+                          icon: _isSwitching
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.power_settings_new_rounded,
+                                  size: 16,
+                                ),
+                          label: const Text(
+                            'Activate',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            backgroundColor: Colors.orange.shade600,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

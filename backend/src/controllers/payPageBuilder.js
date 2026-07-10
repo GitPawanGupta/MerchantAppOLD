@@ -195,12 +195,17 @@ function showResult(ok,orderId,payId,amtPaise,errMsg){
     +'<div style="display:flex;justify-content:space-between;padding:13px 0;"><span style="font-size:13px;color:#6b7280;">Status</span><span style="font-size:13px;font-weight:700;color:'+accent+';">'+(ok?'SUCCESS':'FAILED')+'</span></div>'
     +'</div>'
     +'<div style="padding:20px 24px 24px;">'
-    +'<button onclick="try{window.close();}catch(e){} this.textContent=\'You may close this tab\';this.disabled=true;" style="width:100%;height:52px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Done</button>'
+    +'<button id="doneBtn" style="width:100%;height:52px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Done</button>'
     +'</div>'
     +'</div>';
   var s=document.createElement('style');
   s.textContent='@keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}';
   document.head.appendChild(s);
+  document.getElementById('doneBtn').addEventListener('click',function(){
+    try{window.close();}catch(e){}
+    this.textContent='You may close this tab';
+    this.disabled=true;
+  });
   if(ok) setTimeout(function(){try{window.close();}catch(e){}},8000);
 }
 window.addEventListener('load',function(){setTimeout(go,500);});
@@ -477,13 +482,18 @@ function showResult(ok,orderId,payId,amtPaise,errMsg){
     +'<div style="display:flex;justify-content:space-between;padding:13px 0;"><span style="font-size:13px;color:#6b7280;">Status</span><span style="font-size:13px;font-weight:700;color:'+accent+';">'+(ok?'SUCCESS':'FAILED')+'</span></div>'
     +'</div>'
     +'<div style="padding:20px 24px 24px;display:flex;flex-direction:column;gap:10px;">'
-    +'<button onclick="try{window.close();}catch(e){} this.textContent=\'You may close this tab\';this.disabled=true;" style="width:100%;height:52px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Done</button>'
+    +'<button id="doneBtn" style="width:100%;height:52px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;">Done</button>'
     +(!ok?'<button onclick="history.back()" style="width:100%;height:44px;background:transparent;color:#6b7280;border:1.5px solid #e5e7eb;border-radius:14px;font-size:14px;font-weight:600;cursor:pointer;">Try Again</button>':'')
     +'</div>'
     +'</div>';
   var s=document.createElement('style');
   s.textContent='@keyframes pop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}';
   document.head.appendChild(s);
+  document.getElementById('doneBtn').addEventListener('click',function(){
+    try{window.close();}catch(e){}
+    this.textContent='You may close this tab';
+    this.disabled=true;
+  });
   if(ok) setTimeout(function(){try{window.close();}catch(e){}},8000);
 }
 document.getElementById('amt').addEventListener('keydown',function(e){

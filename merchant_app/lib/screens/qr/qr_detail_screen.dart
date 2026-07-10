@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -26,31 +27,44 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
   bool _deactivating = false;
   bool _saving = false;
   bool _sharing = false;
-  late QRModel _qr; // mutable — updated after sync
+  late QRModel _qr;
+  Timer? _autoRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     _qr = widget.qr;
+    // Auto-refresh every 15 seconds — silently syncs + reloads stats
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      _silentRefresh();
+    });
   }
 
-  // Pull-to-refresh: sync missed payments then reload QR stats
-  Future<void> _onRefresh() async {
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  // Silent background refresh — no loading indicator
+  Future<void> _silentRefresh() async {
+    if (!mounted) return;
     try {
-      // 1. Trigger sync silently
       await ApiService.post('/qr/${_qr.qrId}/sync', {});
-    } catch (_) {
-      // Non-fatal — still reload
-    }
+    } catch (_) {}
     try {
-      // 2. Reload QR detail to get updated stats
       final res = await ApiService.get('/qr?qrId=${_qr.qrId}');
       final list = res['data'] as List?;
-      if (list != null && list.isNotEmpty) {
+      if (list != null && list.isNotEmpty && mounted) {
         final updated = QRModel.fromJson(list.first as Map<String, dynamic>);
-        if (mounted) setState(() => _qr = updated);
+        setState(() => _qr = updated);
       }
     } catch (_) {}
+  }
+
+  // Pull-to-refresh — same logic, visible indicator
+  Future<void> _onRefresh() async {
+    await _silentRefresh();
   }
 
   Future<Uint8List> _getQRBytes() async {

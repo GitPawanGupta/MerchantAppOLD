@@ -358,7 +358,7 @@ class _AdminGatewayScreenState extends State<AdminGatewayScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.wifi_tethering, size: 18),
-                    label: Text(isTesting ? 'Testing...' : 'Test Connection'),
+                    label: Text(isTesting ? 'Checking...' : 'Check Status'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.blue,
                       side: const BorderSide(color: Colors.blue),

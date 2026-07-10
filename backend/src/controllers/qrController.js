@@ -134,6 +134,58 @@ const scanQR = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/qr/:qrId/sync
+ * Merchant triggers sync of missed Razorpay QR payments.
+ * Called automatically on pull-to-refresh in QR detail screen.
+ */
+const syncQRPayments = async (req, res, next) => {
+  try {
+    const QRCodeModel = require('../models/QRCode');
+    const { processQRCodeCreditedPayment } = require('../services/paymentService');
+    const paymentGatewayFactory = require('../services/gateways/PaymentGatewayFactory');
+
+    const qr = await QRCodeModel.findOne({
+      qrId: req.params.qrId,
+      merchantId: req.merchant._id,
+    });
+
+    if (!qr) return errorResponse(res, 'QR not found', 404);
+
+    // No Razorpay QR linked — nothing to sync
+    if (!qr.razorpayQrId) {
+      return successResponse(res, { synced: 0, skipped: 0 }, 'No Razorpay QR linked');
+    }
+
+    const adapter = paymentGatewayFactory.getGatewayByName('razorpay');
+    const rzpPayments = await adapter.fetchQRPayments(qr.razorpayQrId);
+    const items = rzpPayments?.items || [];
+
+    let synced = 0, skipped = 0;
+
+    for (const payment of items) {
+      if (payment.status !== 'captured') { skipped++; continue; }
+      try {
+        const result = await processQRCodeCreditedPayment({
+          razorpayQrId: qr.razorpayQrId,
+          internalQrId: qr.qrId,
+          rzpPaymentId: payment.id,
+          amountPaise: payment.amount,
+          method: payment.method || 'upi',
+          vpa: payment.vpa || null,
+          capturedAt: payment.captured_at ? new Date(payment.captured_at * 1000) : new Date(),
+        });
+        result.alreadyProcessed ? skipped++ : synced++;
+      } catch (_) { skipped++; }
+    }
+
+    return successResponse(res, { synced, skipped, total: items.length },
+      synced > 0 ? `${synced} new payment(s) synced` : 'Already up to date');
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   staticQRValidation,
   dynamicQRValidation,
@@ -144,4 +196,5 @@ module.exports = {
   deactivateQR,
   deleteQR,
   scanQR,
+  syncQRPayments,
 };

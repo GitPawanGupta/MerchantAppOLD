@@ -15,6 +15,7 @@ router.post('/static', qrController.staticQRValidation, validate, qrController.c
 router.post('/dynamic', qrController.dynamicQRValidation, validate, qrController.createDynamicQR);
 router.get('/:qrId/image', qrController.getQRImage);
 router.patch('/:qrId/deactivate', qrController.deactivateQR);
+router.post('/:qrId/sync', qrController.syncQRPayments);
 router.delete('/:qrId', qrController.deleteQR);
 
 module.exports = router;

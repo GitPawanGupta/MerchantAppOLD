@@ -26,14 +26,38 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
   bool _deactivating = false;
   bool _saving = false;
   bool _sharing = false;
+  late QRModel _qr; // mutable — updated after sync
+
+  @override
+  void initState() {
+    super.initState();
+    _qr = widget.qr;
+  }
+
+  // Pull-to-refresh: sync missed payments then reload QR stats
+  Future<void> _onRefresh() async {
+    try {
+      // 1. Trigger sync silently
+      await ApiService.post('/qr/${_qr.qrId}/sync', {});
+    } catch (_) {
+      // Non-fatal — still reload
+    }
+    try {
+      // 2. Reload QR detail to get updated stats
+      final res = await ApiService.get('/qr?qrId=${_qr.qrId}');
+      final list = res['data'] as List?;
+      if (list != null && list.isNotEmpty) {
+        final updated = QRModel.fromJson(list.first as Map<String, dynamic>);
+        if (mounted) setState(() => _qr = updated);
+      }
+    } catch (_) {}
+  }
 
   Future<Uint8List> _getQRBytes() async {
-    // If Razorpay hosted image available — download it directly
-    if (widget.qr.isRazorpayQR) {
-      final response = await http.get(Uri.parse(widget.qr.razorpayQrImageUrl!));
+    if (_qr.isRazorpayQR) {
+      final response = await http.get(Uri.parse(_qr.razorpayQrImageUrl!));
       if (response.statusCode == 200) return response.bodyBytes;
     }
-    // Fallback — render the Flutter QR widget to PNG
     final boundary =
         _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
     final image = await boundary.toImage(pixelRatio: 3.0);
@@ -47,7 +71,7 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
     try {
       final bytes = await _getQRBytes();
       final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/qr_${widget.qr.qrId}.png';
+      final path = '${dir.path}/qr_${_qr.qrId}.png';
       await File(path).writeAsBytes(bytes);
       await Gal.putImage(path);
       if (mounted) {
@@ -60,9 +84,8 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -75,20 +98,18 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
     try {
       final bytes = await _getQRBytes();
       final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/qr_${widget.qr.qrId}.png';
+      final path = '${dir.path}/qr_${_qr.qrId}.png';
       await File(path).writeAsBytes(bytes);
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(path)],
-          text:
-              'Pay to ${widget.qr.label} using this link: ${widget.qr.paymentUrl}',
+          text: 'Pay to ${_qr.label} using this link: ${_qr.paymentUrl}',
         ),
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Share failed: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Share failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _sharing = false);
@@ -96,7 +117,7 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
   }
 
   Future<void> _copyLink() async {
-    await Clipboard.setData(ClipboardData(text: widget.qr.paymentUrl));
+    await Clipboard.setData(ClipboardData(text: _qr.paymentUrl));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Payment link copied to clipboard')),
@@ -130,18 +151,16 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
     if (confirm != true) return;
     setState(() => _deactivating = true);
     try {
-      await ApiService.patch('/qr/${widget.qr.qrId}/deactivate', {});
+      await ApiService.patch('/qr/${_qr.qrId}/deactivate', {});
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('QR code deactivated')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('QR code deactivated')));
         Navigator.pop(context);
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _deactivating = false);
@@ -150,7 +169,7 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final qr = widget.qr;
+    final qr = _qr; // use mutable local copy
     return Scaffold(
       backgroundColor: AppTheme.bgLight,
       appBar: AppBar(
@@ -170,10 +189,13 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
             // ── QR Card ────────────────────────────────────────────────
             Card(
               child: Padding(
@@ -470,7 +492,7 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
                 ),
               ),
             ],
-          ],
+          ),
         ),
       ),
     );

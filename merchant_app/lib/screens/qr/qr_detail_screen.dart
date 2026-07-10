@@ -492,7 +492,7 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
                 ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );

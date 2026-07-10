@@ -10,14 +10,7 @@ const BACKEND_URL = process.env.BACKEND_URL || 'https://app.pasuai.online';
 
 /**
  * Build the web URL that gets embedded in the QR image.
- *
- * We always use the web URL — never a UPI deep link — so that:
- *   1. Every payment goes through Razorpay checkout on our platform.
- *   2. Commission is calculated and deducted on every transaction.
- *   3. We have a full transaction record for settlement and reporting.
- *
- * A UPI deep link (upi://pay?pa=VPA) would let customers pay the merchant
- * directly, completely bypassing our platform, commission, and settlement.
+ * Used as fallback when Razorpay QR creation fails.
  */
 const buildPaymentUrl = (qrId, amount = null) => {
   const params = new URLSearchParams({ qrId });
@@ -28,6 +21,7 @@ const buildPaymentUrl = (qrId, amount = null) => {
 /**
  * Generate a QR code PNG as a base64 data URL.
  * Called on-the-fly — result is NOT stored in MongoDB.
+ * Used as fallback when razorpayQrImageUrl is not available.
  */
 const generateQRImage = async (data) => {
   return QRCode.toDataURL(data, {
@@ -39,11 +33,31 @@ const generateQRImage = async (data) => {
   });
 };
 
+/**
+ * Try to create a Razorpay UPI QR Code.
+ * Returns null on failure (non-fatal — falls back to URL QR).
+ */
+const tryCreateRazorpayQR = async ({ name, description, usage, amount, internalQrId, closeBy }) => {
+  try {
+    const razorpayAdapter = require('./gateways/RazorpayAdapter');
+    // RazorpayAdapter is a class, not singleton — get from factory
+    const paymentGatewayFactory = require('./gateways/PaymentGatewayFactory');
+    const adapter = paymentGatewayFactory.getGatewayByName('razorpay');
+    const result = await adapter.createRazorpayQR({ name, description, usage, amount, internalQrId, closeBy });
+    return result;
+  } catch (err) {
+    logger.warn(`Razorpay QR creation failed (non-fatal), falling back to URL QR: ${err.message}`);
+    return null;
+  }
+};
+
 // ─── Create QR Codes ──────────────────────────────────────────────────────────
 
 /**
  * Create a static QR for a merchant.
  * Static = reusable, accepts any amount, never expires.
+ * Attempts to create a Razorpay UPI QR first (no PhonePe warning).
+ * Falls back to URL QR if Razorpay QR creation fails.
  */
 const createStaticQR = async (merchantId, label = 'Payment QR') => {
   const merchant = await Merchant.findById(merchantId);
@@ -61,6 +75,16 @@ const createStaticQR = async (merchantId, label = 'Payment QR') => {
   const qrId = `QR_${uuidv4().replace(/-/g, '').substring(0, 16).toUpperCase()}`;
   const paymentUrl = buildPaymentUrl(qrId);
 
+  // Try Razorpay UPI QR first
+  const rzpQR = await tryCreateRazorpayQR({
+    name: merchant.businessName,
+    description: label,
+    usage: 'multiple_use',
+    amount: null,       // open amount — customer enters in UPI app
+    internalQrId: qrId,
+    closeBy: null,      // never expires
+  });
+
   const qr = await QRCodeModel.create({
     merchantId,
     qrId,
@@ -68,15 +92,18 @@ const createStaticQR = async (merchantId, label = 'Payment QR') => {
     label,
     paymentUrl,
     isActive: true,
+    razorpayQrId: rzpQR?.razorpayQrId || null,
+    razorpayQrImageUrl: rzpQR?.imageUrl || null,
   });
 
-  logger.info(`Static QR created for merchant ${merchant.merchantId}: ${qrId}`);
+  logger.info(`Static QR created for merchant ${merchant.merchantId}: ${qrId}${rzpQR ? ' (Razorpay UPI QR ✓)' : ' (URL QR fallback)'}`);
   return qr;
 };
 
 /**
  * Create a dynamic QR for a specific amount.
  * Dynamic = fixed amount, expires after `expiresInMinutes` (default 30 min).
+ * Attempts to create a Razorpay UPI QR first (no PhonePe warning).
  */
 const createDynamicQR = async (merchantId, { amount, label, expiresInMinutes = 30 }) => {
   const merchant = await Merchant.findById(merchantId);
@@ -100,6 +127,17 @@ const createDynamicQR = async (merchantId, { amount, label, expiresInMinutes = 3
   const orderId = generateOrderId('DYN');
   const paymentUrl = buildPaymentUrl(qrId, amount);
   const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
+  const closeByUnix = Math.floor(expiresAt.getTime() / 1000);
+
+  // Try Razorpay UPI QR with fixed amount + expiry
+  const rzpQR = await tryCreateRazorpayQR({
+    name: merchant.businessName,
+    description: label || `Pay ₹${amount}`,
+    usage: 'single_use',  // dynamic = single use
+    amount,               // fixed amount
+    internalQrId: qrId,
+    closeBy: closeByUnix,
+  });
 
   const qr = await QRCodeModel.create({
     merchantId,
@@ -111,9 +149,11 @@ const createDynamicQR = async (merchantId, { amount, label, expiresInMinutes = 3
     isActive: true,
     expiresAt,
     orderId,
+    razorpayQrId: rzpQR?.razorpayQrId || null,
+    razorpayQrImageUrl: rzpQR?.imageUrl || null,
   });
 
-  logger.info(`Dynamic QR created for merchant ${merchant.merchantId}: ${qrId}, ₹${amount}, expires: ${expiresAt.toISOString()}`);
+  logger.info(`Dynamic QR created for merchant ${merchant.merchantId}: ${qrId}, ₹${amount}, expires: ${expiresAt.toISOString()}${rzpQR ? ' (Razorpay UPI QR ✓)' : ' (URL QR fallback)'}`);
   return qr;
 };
 
@@ -180,9 +220,8 @@ const getQRByQrId = async (qrId) => {
 };
 
 /**
- * Generate QR image PNG on-the-fly for a merchant's QR code.
- * Image is NOT cached in DB — generated fresh each request.
- * For production scale, add a CDN layer in front of this endpoint.
+ * Get QR image — returns Razorpay hosted URL if available,
+ * otherwise generates on-the-fly from paymentUrl (fallback).
  */
 const getQRImage = async (qrId, merchantId) => {
   const qr = await QRCodeModel.findOne({ qrId, merchantId });
@@ -191,14 +230,20 @@ const getQRImage = async (qrId, merchantId) => {
     err.statusCode = 404;
     throw err;
   }
-  // Generate PNG as base64 data URL fresh each time
-  return generateQRImage(qr.paymentUrl);
+  // If Razorpay QR image is available, return its URL
+  if (qr.razorpayQrImageUrl) {
+    return { type: 'url', url: qr.razorpayQrImageUrl };
+  }
+  // Fallback: generate PNG as base64 data URL fresh each time
+  const dataUrl = await generateQRImage(qr.paymentUrl);
+  return { type: 'base64', url: dataUrl };
 };
 
 // ─── Manage QR Codes ──────────────────────────────────────────────────────────
 
 /**
  * Deactivate a QR code (soft delete — keeps record and stats)
+ * Also closes Razorpay QR if one was created.
  */
 const deactivateQR = async (qrId, merchantId) => {
   const qr = await QRCodeModel.findOneAndUpdate(
@@ -211,6 +256,20 @@ const deactivateQR = async (qrId, merchantId) => {
     err.statusCode = 404;
     throw err;
   }
+
+  // Close Razorpay QR non-blocking
+  if (qr.razorpayQrId) {
+    setImmediate(async () => {
+      try {
+        const paymentGatewayFactory = require('./gateways/PaymentGatewayFactory');
+        const adapter = paymentGatewayFactory.getGatewayByName('razorpay');
+        await adapter.closeRazorpayQR(qr.razorpayQrId);
+      } catch (e) {
+        logger.warn(`Failed to close Razorpay QR ${qr.razorpayQrId}: ${e.message}`);
+      }
+    });
+  }
+
   return qr;
 };
 

@@ -66,19 +66,23 @@ const listQRCodes = async (req, res, next) => {
 
 /**
  * GET /api/qr/:qrId/image
- * Generate and stream QR image as PNG.
- * Image is generated on-the-fly from the stored paymentUrl — not from DB.
- * Add CDN caching in front of this for production scale.
+ * Returns QR image — either Razorpay hosted URL (redirect) or generated PNG.
  */
 const getQRImage = async (req, res, next) => {
   try {
-    const base64DataUrl = await qrService.getQRImage(req.params.qrId, req.merchant._id);
-    // Strip "data:image/png;base64," prefix and decode to binary
-    const base64Data = base64DataUrl.split(',')[1];
+    const result = await qrService.getQRImage(req.params.qrId, req.merchant._id);
+
+    if (result.type === 'url') {
+      // Razorpay hosted image — redirect to it
+      return res.redirect(302, result.url);
+    }
+
+    // Fallback: base64 PNG
+    const base64Data = result.url.split(',')[1];
     const imgBuffer = Buffer.from(base64Data, 'base64');
     res.set('Content-Type', 'image/png');
     res.set('Content-Disposition', `attachment; filename="qr_${req.params.qrId}.png"`);
-    res.set('Cache-Control', 'public, max-age=3600'); // 1 hour client-side cache
+    res.set('Cache-Control', 'public, max-age=3600');
     return res.send(imgBuffer);
   } catch (error) {
     next(error);

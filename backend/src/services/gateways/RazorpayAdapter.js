@@ -252,6 +252,86 @@ class RazorpayAdapter extends IGatewayAdapter {
       },
     };
   }
+
+  // ─── Razorpay QR Code API ─────────────────────────────────────────────────
+
+  /**
+   * Create a Razorpay UPI QR Code
+   * Returns a UPI QR that opens directly in UPI apps (no browser/redirect warning)
+   *
+   * @param {Object} params
+   * @param {String} params.name         - Display name on QR (merchant name)
+   * @param {String} params.description  - QR label / description
+   * @param {String} params.usage        - 'single_use' | 'multiple_use'
+   * @param {Number|null} params.amount  - Fixed amount in rupees (null = open amount)
+   * @param {String} params.internalQrId - Our internal QR ID stored in notes
+   * @param {Number|null} params.closeBy - Unix timestamp for expiry (null = no expiry)
+   */
+  async createRazorpayQR({ name, description, usage = 'multiple_use', amount = null, internalQrId, closeBy = null }) {
+    try {
+      const payload = {
+        type: 'upi_qr',
+        name,
+        usage,
+        fixed_amount: amount ? 1 : 0,
+        payment_amount: amount ? Math.round(amount * 100) : undefined, // paise
+        description,
+        customer_id: undefined, // optional
+        close_by: closeBy || undefined,
+        notes: {
+          internal_qr_id: internalQrId,
+        },
+      };
+
+      // Remove undefined fields
+      Object.keys(payload).forEach(k => payload[k] === undefined && delete payload[k]);
+
+      const qr = await this.client.qrCode.create(payload);
+
+      logger.info(`Razorpay QR created: ${qr.id} for internal QR ${internalQrId}`);
+
+      return {
+        razorpayQrId: qr.id,
+        imageUrl: qr.image_url,       // Hosted PNG URL — use directly
+        upiLink: qr.payment_url,       // upi://pay?... deep link
+        status: qr.status,
+        closeBy: qr.close_by ? new Date(qr.close_by * 1000) : null,
+        rawResponse: qr,
+      };
+    } catch (error) {
+      logger.error(`Razorpay QR creation failed: ${error.message}`);
+      throw new Error(`Razorpay QR creation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Close/deactivate a Razorpay QR Code
+   * @param {String} razorpayQrId - Razorpay QR ID (e.g., qr_xxx)
+   */
+  async closeRazorpayQR(razorpayQrId) {
+    try {
+      const qr = await this.client.qrCode.close(razorpayQrId);
+      logger.info(`Razorpay QR closed: ${razorpayQrId}`);
+      return { success: true, status: qr.status };
+    } catch (error) {
+      logger.error(`Razorpay QR close failed for ${razorpayQrId}: ${error.message}`);
+      throw new Error(`Razorpay QR close failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Fetch all payments received on a Razorpay QR Code
+   * @param {String} razorpayQrId
+   */
+  async fetchQRPayments(razorpayQrId) {
+    try {
+      const payments = await this.client.qrCode.fetchAllPayments(razorpayQrId);
+      return payments;
+    } catch (error) {
+      logger.error(`Razorpay QR fetch payments failed: ${error.message}`);
+      throw new Error(`Razorpay QR fetch payments failed: ${error.message}`);
+    }
+  }
 }
 
 module.exports = RazorpayAdapter;

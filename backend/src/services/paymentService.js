@@ -211,6 +211,7 @@ const verifyPaymentOrder = async (orderId, paymentId = null, signature = null) =
 /**
  * Process payment gateway webhook
  * Auto-detects gateway from headers/signature and routes to appropriate adapter
+ * Handles both regular payment webhooks and qr_code.credited events
  */
 const processWebhook = async (rawBody, headers, payload) => {
   // Detect gateway from headers
@@ -225,6 +226,12 @@ const processWebhook = async (rawBody, headers, payload) => {
   // Get appropriate gateway adapter
   const gateway = paymentGatewayFactory.getGatewayByName(gatewayName);
   
+  // ── Handle Razorpay qr_code.credited event ───────────────────────────────
+  // This fires when a customer pays via Razorpay UPI QR
+  if (gatewayName === 'razorpay' && payload.event === 'qr_code.credited') {
+    return await processQRCodeCreditedWebhook(rawBody, headers, payload);
+  }
+
   // Process webhook through adapter
   let webhookResult;
   try {
@@ -256,6 +263,146 @@ const processWebhook = async (rawBody, headers, payload) => {
 
   logger.info(`${gatewayName} webhook processed: ${transaction.orderId} → ${transaction.status}`);
   return { processed: true, orderId: transaction.orderId, status: transaction.status };
+};
+
+/**
+ * Handle Razorpay qr_code.credited webhook
+ * Fired when customer pays via Razorpay UPI QR (no Razorpay order/checkout involved)
+ *
+ * Webhook payload structure:
+ * {
+ *   event: "qr_code.credited",
+ *   payload: {
+ *     qr_code: { entity: { id, notes: { internal_qr_id }, ... } },
+ *     payment: { entity: { id, amount, status, method, vpa, ... } }
+ *   }
+ * }
+ */
+const processQRCodeCreditedWebhook = async (rawBody, headers, payload) => {
+  // Verify signature
+  const signature = headers['x-razorpay-signature'];
+  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (webhookSecret && signature) {
+    const crypto = require('crypto');
+    const generated = crypto
+      .createHmac('sha256', webhookSecret)
+      .update(rawBody)
+      .digest('hex');
+    if (generated !== signature) {
+      logger.warn('qr_code.credited webhook: invalid signature');
+      return { isValid: false, error: 'Invalid signature' };
+    }
+  }
+
+  const qrEntity = payload.payload?.qr_code?.entity;
+  const paymentEntity = payload.payload?.payment?.entity;
+
+  if (!qrEntity || !paymentEntity) {
+    logger.warn('qr_code.credited: missing qr_code or payment entity');
+    return { isValid: false, error: 'Missing entities' };
+  }
+
+  const razorpayQrId = qrEntity.id;                           // e.g., qr_xxx
+  const internalQrId = qrEntity.notes?.internal_qr_id;        // our QR ID
+  const rzpPaymentId = paymentEntity.id;                       // pay_xxx
+  const amountPaise  = paymentEntity.amount;                   // in paise
+  const amountRs     = amountPaise / 100;
+  const method       = paymentEntity.method || 'upi';
+  const vpa          = paymentEntity.vpa || null;
+  const capturedAt   = paymentEntity.captured_at
+    ? new Date(paymentEntity.captured_at * 1000) : new Date();
+
+  logger.info(`qr_code.credited: QR ${razorpayQrId} (${internalQrId}), payment ${rzpPaymentId}, ₹${amountRs}`);
+
+  // Find QR by Razorpay QR ID or internal QR ID
+  const QRCodeModel = require('../models/QRCode');
+  const qr = await QRCodeModel.findOne({
+    $or: [
+      { razorpayQrId },
+      { qrId: internalQrId },
+    ],
+  }).populate('merchantId', 'merchantId businessName _id');
+
+  if (!qr) {
+    logger.warn(`qr_code.credited: QR not found for razorpayQrId=${razorpayQrId} internalQrId=${internalQrId}`);
+    return { ignored: true, reason: 'QR not found' };
+  }
+
+  const merchant = qr.merchantId;
+
+  // ── Idempotency: check if this payment was already processed ──────────────
+  const existingTx = await Transaction.findOne({ cfPaymentId: rzpPaymentId });
+  if (existingTx) {
+    logger.info(`qr_code.credited: payment ${rzpPaymentId} already processed`);
+    return { alreadyProcessed: true };
+  }
+
+  // ── Calculate commission ──────────────────────────────────────────────────
+  const commissionRate = await getEffectiveCommissionRate(merchant._id);
+  const { commissionAmount, settlementAmount } = calculateCommission(amountRs, commissionRate);
+
+  // ── Create transaction record ─────────────────────────────────────────────
+  const orderId = generateOrderId('QRP'); // QRP = QR Payment
+
+  const transaction = await Transaction.create({
+    orderId,
+    merchantId: merchant._id,
+    qrCodeId: qr._id,
+    cfOrderId: razorpayQrId,   // Store Razorpay QR ID as gateway order ref
+    cfPaymentId: rzpPaymentId,
+    customerName: 'Customer',
+    amount: amountRs,
+    commissionRate,
+    commissionAmount,
+    settlementAmount,
+    currency: 'INR',
+    status: 'success',         // QR credited = payment confirmed
+    paymentGateway: 'razorpay',
+    paymentMethod: method,
+    upiTransactionId: vpa,
+    paymentTime: capturedAt,
+  });
+
+  // ── Update merchant balance + QR stats (atomic, single update) ───────────
+  await Promise.all([
+    Merchant.findByIdAndUpdate(merchant._id, {
+      $inc: {
+        totalCollected: amountRs,
+        totalCommission: commissionAmount,
+        pendingSettlement: settlementAmount,
+      },
+      lastTransactionDate: new Date(),
+    }),
+    QRCodeModel.findByIdAndUpdate(qr._id, {
+      $inc: {
+        successfulPayments: 1,
+        totalAmountCollected: amountRs,
+      },
+    }),
+  ]);
+
+  // ── Create commission ledger entry ────────────────────────────────────────
+  const { CommissionLedger } = require('../models/Commission');
+  await CommissionLedger.create({
+    transactionId: transaction._id,
+    merchantId: merchant._id,
+    transactionAmount: amountRs,
+    commissionRate,
+    flatFee: 0,
+    commissionAmount,
+    netSettlementAmount: settlementAmount,
+    status: 'pending',
+  });
+
+  logger.info(`qr_code.credited processed: orderId=${orderId} ₹${amountRs} merchant=${merchant.merchantId} commission=₹${commissionAmount}`);
+
+  return {
+    processed: true,
+    orderId,
+    rzpPaymentId,
+    amount: amountRs,
+    merchantId: merchant.merchantId,
+  };
 };
 
 /**

@@ -36,6 +36,18 @@ const qrCodeSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Razorpay UPI QR Code ID (qr_xxx) — set when Razorpay QR is created
+    razorpayQrId: {
+      type: String,
+      default: null,
+      index: true,
+      sparse: true,
+    },
+    // Hosted image URL from Razorpay CDN — shown directly in app
+    razorpayQrImageUrl: {
+      type: String,
+      default: null,
+    },
     // Payment URL embedded inside the QR image
     paymentUrl: {
       type: String,

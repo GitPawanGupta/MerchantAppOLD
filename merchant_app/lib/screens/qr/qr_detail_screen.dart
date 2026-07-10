@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -7,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:gal/gal.dart';
+import 'package:http/http.dart' as http;
 import '../../core/models/qr_model.dart';
 import '../../core/services/api_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -25,25 +27,29 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
   bool _saving = false;
   bool _sharing = false;
 
+  Future<Uint8List> _getQRBytes() async {
+    // If Razorpay hosted image available — download it directly
+    if (widget.qr.isRazorpayQR) {
+      final response = await http.get(Uri.parse(widget.qr.razorpayQrImageUrl!));
+      if (response.statusCode == 200) return response.bodyBytes;
+    }
+    // Fallback — render the Flutter QR widget to PNG
+    final boundary =
+        _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: 3.0);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
+
   Future<void> _saveQR() async {
     if (_saving) return;
     setState(() => _saving = true);
     try {
-      final boundary =
-          _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final bytes = byteData!.buffer.asUint8List();
-
-      // Save to temporary directory first
+      final bytes = await _getQRBytes();
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/qr_${widget.qr.qrId}.png';
-      final file = File(path);
-      await file.writeAsBytes(bytes);
-
-      // Save to device's photo gallery
+      await File(path).writeAsBytes(bytes);
       await Gal.putImage(path);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -67,22 +73,15 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
     if (_sharing) return;
     setState(() => _sharing = true);
     try {
-      final boundary =
-          _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      final bytes = byteData!.buffer.asUint8List();
-
+      final bytes = await _getQRBytes();
       final dir = await getTemporaryDirectory();
       final path = '${dir.path}/qr_${widget.qr.qrId}.png';
-      final file = File(path);
-      await file.writeAsBytes(bytes);
-
-      final XFile xFile = XFile(path);
+      await File(path).writeAsBytes(bytes);
       await SharePlus.instance.share(
         ShareParams(
-          files: [xFile],
-          text: 'Pay to ${widget.qr.label} using this link: ${widget.qr.paymentUrl}',
+          files: [XFile(path)],
+          text:
+              'Pay to ${widget.qr.label} using this link: ${widget.qr.paymentUrl}',
         ),
       );
     } catch (e) {
@@ -191,20 +190,86 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
                         ),
                         child: Column(
                           children: [
-                            QrImageView(
-                              data: qr.paymentUrl,
-                              version: QrVersions.auto,
-                              size: 220,
-                              backgroundColor: Colors.white,
-                              eyeStyle: const QrEyeStyle(
-                                eyeShape: QrEyeShape.square,
-                                color: Color(0xFF6C63FF),
+                            // Razorpay UPI QR — hosted image (no PhonePe warning)
+                            if (qr.isRazorpayQR)
+                              Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      qr.razorpayQrImageUrl!,
+                                      width: 220,
+                                      height: 220,
+                                      fit: BoxFit.contain,
+                                      loadingBuilder: (ctx, child, progress) {
+                                        if (progress == null) return child;
+                                        return SizedBox(
+                                          width: 220,
+                                          height: 220,
+                                          child: Center(
+                                            child: CircularProgressIndicator(
+                                              value:
+                                                  progress.expectedTotalBytes !=
+                                                      null
+                                                  ? progress.cumulativeBytesLoaded /
+                                                        progress
+                                                            .expectedTotalBytes!
+                                                  : null,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      errorBuilder: (_, __, ___) => QrImageView(
+                                        data: qr.paymentUrl,
+                                        version: QrVersions.auto,
+                                        size: 220,
+                                        backgroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                  // UPI badge
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.shade600,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'UPI QR',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            // Fallback URL QR
+                            else
+                              QrImageView(
+                                data: qr.paymentUrl,
+                                version: QrVersions.auto,
+                                size: 220,
+                                backgroundColor: Colors.white,
+                                eyeStyle: const QrEyeStyle(
+                                  eyeShape: QrEyeShape.square,
+                                  color: Color(0xFF6C63FF),
+                                ),
+                                dataModuleStyle: const QrDataModuleStyle(
+                                  dataModuleShape: QrDataModuleShape.circle,
+                                  color: Color(0xFF0F172A),
+                                ),
                               ),
-                              dataModuleStyle: const QrDataModuleStyle(
-                                dataModuleShape: QrDataModuleShape.circle,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
                             const SizedBox(height: 12),
                             Text(
                               qr.label,
@@ -224,6 +289,35 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
                                 ),
                               ),
                             ],
+                            // QR type indicator
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  qr.isRazorpayQR
+                                      ? Icons.verified_rounded
+                                      : Icons.qr_code_rounded,
+                                  size: 13,
+                                  color: qr.isRazorpayQR
+                                      ? Colors.green.shade600
+                                      : Colors.grey.shade400,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  qr.isRazorpayQR
+                                      ? 'UPI QR — opens directly in UPI apps'
+                                      : 'URL QR — opens via browser',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: qr.isRazorpayQR
+                                        ? Colors.green.shade600
+                                        : Colors.grey.shade400,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),

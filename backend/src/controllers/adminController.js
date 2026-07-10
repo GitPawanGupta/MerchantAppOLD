@@ -1093,6 +1093,73 @@ const getKYCDocuments = async (req, res, next) => {
   }
 };
 
+// ─── Payment Gateway Management ───────────────────────────────────────────────
+
+/**
+ * GET /api/admin/gateways
+ * Get all available payment gateways with active status
+ */
+const getGateways = async (req, res, next) => {
+  try {
+    const paymentGatewayFactory = require('../services/gateways/PaymentGatewayFactory');
+    const gateways = await paymentGatewayFactory.getAllGateways();
+    return successResponse(res, {
+      gateways,
+      activeGateway: paymentGatewayFactory.activeGateway,
+    }, 'Payment gateways fetched');
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/admin/gateways/switch
+ * Switch active payment gateway
+ * Body: { gateway: 'razorpay' | 'cashfree' }
+ */
+const switchGateway = async (req, res, next) => {
+  try {
+    const { gateway } = req.body;
+    if (!gateway || !['razorpay', 'cashfree'].includes(gateway)) {
+      return errorResponse(res, 'Invalid gateway. Must be razorpay or cashfree', 400);
+    }
+    const paymentGatewayFactory = require('../services/gateways/PaymentGatewayFactory');
+    const previousGateway = paymentGatewayFactory.activeGateway;
+    if (previousGateway === gateway) {
+      return errorResponse(res, `${gateway} is already active`, 400);
+    }
+    await paymentGatewayFactory.switchGateway(gateway);
+    logger.info(`[ADMIN] Gateway switched: ${previousGateway} → ${gateway} by admin ${req.user._id}`);
+    return successResponse(res, {
+      activeGateway: gateway,
+      previousGateway,
+      switchedAt: new Date(),
+    }, `Payment gateway switched to ${gateway.charAt(0).toUpperCase() + gateway.slice(1)}`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/admin/gateways/test
+ * Test gateway connection
+ * Body: { gateway: 'razorpay' | 'cashfree' }
+ */
+const testGateway = async (req, res, next) => {
+  try {
+    const { gateway } = req.body;
+    if (!gateway || !['razorpay', 'cashfree'].includes(gateway)) {
+      return errorResponse(res, 'Invalid gateway. Must be razorpay or cashfree', 400);
+    }
+    const paymentGatewayFactory = require('../services/gateways/PaymentGatewayFactory');
+    const result = await paymentGatewayFactory.testGateway(gateway);
+    logger.info(`[ADMIN] Gateway test: ${gateway} - ${result.success ? 'SUCCESS' : 'FAILED'} by admin ${req.user._id}`);
+    return successResponse(res, result, result.message);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   // Validation
   globalCommissionValidation,
@@ -1142,4 +1209,10 @@ module.exports = {
   // Admin Commission Settlement
   getCommissionBalance,
   settleCommission,
+  // Payment Gateway Management
+  getGateways,
+  switchGateway,
+  testGateway,
 };
+
+

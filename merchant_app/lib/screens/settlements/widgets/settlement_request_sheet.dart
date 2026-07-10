@@ -317,7 +317,9 @@ class _SettlementRequestSheetState extends State<SettlementRequestSheet> {
                         ),
                         child: RadioListTile<String>(
                           value: bank.id,
+                          // ignore: deprecated_member_use
                           groupValue: _selectedBankId,
+                          // ignore: deprecated_member_use
                           onChanged: _loading
                               ? null
                               : (val) => setState(() => _selectedBankId = val),

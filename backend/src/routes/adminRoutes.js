@@ -91,4 +91,9 @@ router.post('/commission/settle', adminController.settleCommission);
 // ── User Management ───────────────────────────────────────────────────────────
 router.get('/users', adminController.listUsers);
 
+// ── Payment Gateway Management ────────────────────────────────────────────────
+router.get('/gateways', adminController.getGateways);
+router.post('/gateways/switch', adminController.switchGateway);
+router.post('/gateways/test', adminController.testGateway);
+
 module.exports = router;

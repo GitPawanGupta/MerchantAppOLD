@@ -1096,6 +1096,74 @@ const getKYCDocuments = async (req, res, next) => {
 // ─── Payment Gateway Management ───────────────────────────────────────────────
 
 /**
+ * POST /api/admin/qr/:razorpayQrId/sync-payments
+ * Manually sync missed QR payments from Razorpay
+ * Used when webhook was not delivered (e.g., newly added qr_code.credited event)
+ */
+const syncQRPayments = async (req, res, next) => {
+  try {
+    const { razorpayQrId } = req.params;
+
+    const QRCodeModel = require('../models/QRCode');
+    const paymentGatewayFactory = require('../services/gateways/PaymentGatewayFactory');
+    const { processQRCodeCreditedPayment } = require('../services/paymentService');
+
+    // Find our QR record
+    const qr = await QRCodeModel.findOne({ razorpayQrId })
+      .populate('merchantId', 'merchantId businessName _id');
+
+    if (!qr) {
+      return errorResponse(res, `No QR found with razorpayQrId: ${razorpayQrId}`, 404);
+    }
+
+    // Fetch all payments from Razorpay for this QR
+    const adapter = paymentGatewayFactory.getGatewayByName('razorpay');
+    const rzpPayments = await adapter.fetchQRPayments(razorpayQrId);
+
+    const items = rzpPayments?.items || [];
+    const results = { synced: [], skipped: [], errors: [] };
+
+    for (const payment of items) {
+      if (payment.status !== 'captured') {
+        results.skipped.push({ id: payment.id, reason: `status=${payment.status}` });
+        continue;
+      }
+
+      try {
+        const result = await processQRCodeCreditedPayment({
+          razorpayQrId,
+          internalQrId: qr.qrId,
+          rzpPaymentId: payment.id,
+          amountPaise: payment.amount,
+          method: payment.method || 'upi',
+          vpa: payment.vpa || null,
+          capturedAt: payment.captured_at
+            ? new Date(payment.captured_at * 1000) : new Date(),
+        });
+
+        if (result.alreadyProcessed) {
+          results.skipped.push({ id: payment.id, reason: 'already processed' });
+        } else {
+          results.synced.push({ id: payment.id, orderId: result.orderId, amount: payment.amount / 100 });
+        }
+      } catch (e) {
+        results.errors.push({ id: payment.id, error: e.message });
+      }
+    }
+
+    logger.info(`[ADMIN] QR sync: ${razorpayQrId} — synced=${results.synced.length} skipped=${results.skipped.length} errors=${results.errors.length}`);
+
+    return successResponse(res, {
+      razorpayQrId,
+      totalPayments: items.length,
+      ...results,
+    }, `Sync complete: ${results.synced.length} new, ${results.skipped.length} already synced`);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * GET /api/admin/gateways
  * Get all available payment gateways with active status
  */
@@ -1213,6 +1281,7 @@ module.exports = {
   getGateways,
   switchGateway,
   testGateway,
+  syncQRPayments,
 };
 
 

@@ -96,4 +96,7 @@ router.get('/gateways', adminController.getGateways);
 router.post('/gateways/switch', adminController.switchGateway);
 router.post('/gateways/test', adminController.testGateway);
 
+// ── QR Payment Sync (manual recovery for missed webhooks) ────────────────────
+router.post('/qr/:razorpayQrId/sync-payments', adminController.syncQRPayments);
+
 module.exports = router;

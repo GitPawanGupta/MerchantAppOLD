@@ -406,6 +406,98 @@ const processQRCodeCreditedWebhook = async (rawBody, headers, payload) => {
 };
 
 /**
+ * processQRCodeCreditedPayment — callable directly (e.g., from admin sync)
+ * Takes already-parsed payment fields, finds QR, creates transaction.
+ * Idempotent: skips if payment already processed.
+ */
+const processQRCodeCreditedPayment = async ({
+  razorpayQrId,
+  internalQrId,
+  rzpPaymentId,
+  amountPaise,
+  method,
+  vpa,
+  capturedAt,
+}) => {
+  const amountRs = amountPaise / 100;
+
+  // Idempotency
+  const existingTx = await Transaction.findOne({ cfPaymentId: rzpPaymentId });
+  if (existingTx) {
+    return { alreadyProcessed: true, orderId: existingTx.orderId };
+  }
+
+  // Find QR
+  const qr = await QRCodeModel.findOne({
+    $or: [{ razorpayQrId }, { qrId: internalQrId }],
+  }).populate('merchantId', 'merchantId businessName _id');
+
+  if (!qr) {
+    throw new Error(`QR not found: razorpayQrId=${razorpayQrId} internalQrId=${internalQrId}`);
+  }
+
+  const merchant = qr.merchantId;
+  const commissionRate = await getEffectiveCommissionRate(merchant._id);
+  const { commissionAmount, settlementAmount } = calculateCommission(amountRs, commissionRate);
+  const orderId = generateOrderId('QRP');
+
+  const transaction = await Transaction.create({
+    orderId,
+    merchantId: merchant._id,
+    qrCodeId: qr._id,
+    cfOrderId: razorpayQrId,
+    cfPaymentId: rzpPaymentId,
+    customerName: 'Customer',
+    amount: amountRs,
+    commissionRate,
+    commissionAmount,
+    settlementAmount,
+    currency: 'INR',
+    status: 'success',
+    paymentGateway: 'razorpay',
+    paymentMethod: method || 'upi',
+    upiTransactionId: vpa,
+    paymentTime: capturedAt || new Date(),
+  });
+
+  await Promise.all([
+    Merchant.findByIdAndUpdate(merchant._id, {
+      $inc: {
+        totalCollected: amountRs,
+        totalCommission: commissionAmount,
+        pendingSettlement: settlementAmount,
+      },
+      lastTransactionDate: new Date(),
+    }),
+    QRCodeModel.findByIdAndUpdate(qr._id, {
+      $inc: { successfulPayments: 1, totalAmountCollected: amountRs },
+    }),
+  ]);
+
+  const { CommissionLedger } = require('../models/Commission');
+  await CommissionLedger.create({
+    transactionId: transaction._id,
+    merchantId: merchant._id,
+    transactionAmount: amountRs,
+    commissionRate,
+    flatFee: 0,
+    commissionAmount,
+    netSettlementAmount: settlementAmount,
+    status: 'pending',
+  });
+
+  logger.info(`processQRCodeCreditedPayment: orderId=${orderId} ₹${amountRs} merchant=${merchant.merchantId}`);
+
+  return {
+    processed: true,
+    orderId,
+    rzpPaymentId,
+    amount: amountRs,
+    merchantId: merchant.merchantId,
+  };
+};
+
+/**
  * Shared logic: update transaction from normalized payment data (from any gateway)
  * Uses atomic findOneAndUpdate to prevent race condition between redirect + webhook
  */
@@ -558,4 +650,5 @@ module.exports = {
   processWebhook,
   getTransactionByOrderId,
   getEffectiveCommissionRate,
+  processQRCodeCreditedPayment,
 };

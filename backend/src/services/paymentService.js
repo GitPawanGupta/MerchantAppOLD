@@ -168,8 +168,9 @@ const verifyPaymentOrder = async (orderId, paymentId = null, signature = null) =
     throw err;
   }
 
-  // Already terminal — return cached status
+  // Already terminal — return cached status (skip all processing)
   if (['success', 'failed', 'cancelled'].includes(transaction.status)) {
+    logger.info(`verifyPaymentOrder: ${orderId} already in terminal state (${transaction.status}), skipping`);
     return transaction;
   }
 
@@ -259,30 +260,68 @@ const processWebhook = async (rawBody, headers, payload) => {
 
 /**
  * Shared logic: update transaction from normalized payment data (from any gateway)
+ * Uses atomic findOneAndUpdate to prevent race condition between redirect + webhook
  */
 const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = null) => {
   if (!paymentData) return;
 
-  // paymentData is normalized from gateway adapter
   const internalStatus = paymentData.status || 'pending';
-  const wasAlreadySuccessful = transaction.status === 'success';
 
-  transaction.status = internalStatus;
-  transaction.cfPaymentId = paymentData.paymentId || transaction.cfPaymentId;
-  transaction.cfReferenceId = paymentData.bankTransactionId || transaction.cfReferenceId;
-  transaction.paymentMethod = resolvePaymentMethod(paymentData.method);
-  transaction.paymentInstrument = paymentData.method || null;
-  transaction.upiTransactionId = paymentData.vpa || null;
-  transaction.paymentTime = paymentData.capturedAt || new Date();
-  transaction.failureReason = paymentData.errorDescription || null;
-  if (webhookPayload || paymentData.rawPayload) {
-    transaction.webhookData = webhookPayload || paymentData.rawPayload;
+  // ── Atomic status transition guard ──────────────────────────────────────────
+  // Only allow transition TO success/failed if current status is still pending.
+  // This prevents the redirect callback AND webhook from both incrementing counters
+  // when they arrive at nearly the same time (race condition).
+  if (internalStatus === 'success' || internalStatus === 'failed' || internalStatus === 'cancelled') {
+    const updated = await Transaction.findOneAndUpdate(
+      {
+        _id: transaction._id,
+        status: 'pending', // ← atomic guard: only update if STILL pending
+      },
+      {
+        $set: {
+          status: internalStatus,
+          cfPaymentId: paymentData.paymentId || transaction.cfPaymentId,
+          cfReferenceId: paymentData.bankTransactionId || transaction.cfReferenceId,
+          paymentMethod: resolvePaymentMethod(paymentData.method),
+          paymentInstrument: paymentData.method || null,
+          upiTransactionId: paymentData.vpa || null,
+          paymentTime: paymentData.capturedAt || new Date(),
+          failureReason: paymentData.errorDescription || null,
+          ...(webhookPayload || paymentData.rawPayload
+            ? { webhookData: webhookPayload || paymentData.rawPayload }
+            : {}),
+        },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      // Transaction was already updated by another concurrent request — skip
+      logger.info(`applyPaymentUpdate: skipped for ${transaction.orderId} — already processed (race condition guard)`);
+      return;
+    }
+
+    // Copy updated fields back onto the in-memory object
+    Object.assign(transaction, updated.toObject());
+  } else {
+    // Non-terminal status (e.g. pending) — just update fields, no guard needed
+    transaction.status = internalStatus;
+    transaction.cfPaymentId = paymentData.paymentId || transaction.cfPaymentId;
+    transaction.cfReferenceId = paymentData.bankTransactionId || transaction.cfReferenceId;
+    transaction.paymentMethod = resolvePaymentMethod(paymentData.method);
+    transaction.paymentInstrument = paymentData.method || null;
+    transaction.upiTransactionId = paymentData.vpa || null;
+    transaction.paymentTime = paymentData.capturedAt || new Date();
+    transaction.failureReason = paymentData.errorDescription || null;
+    if (webhookPayload || paymentData.rawPayload) {
+      transaction.webhookData = webhookPayload || paymentData.rawPayload;
+    }
+    await transaction.save();
   }
 
-  await transaction.save();
-
-  // On success — update merchant totals and QR stats (ONLY if status changed to success)
-  if (internalStatus === 'success' && !wasAlreadySuccessful) {
+  // On success — update merchant totals and QR stats EXACTLY ONCE
+  // (guaranteed by the atomic guard above)
+  if (internalStatus === 'success') {
     await Promise.all([
       Merchant.findByIdAndUpdate(transaction.merchantId, {
         $inc: {
@@ -296,22 +335,23 @@ const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = nul
       }),
     ]);
 
+    logger.info(`Payment confirmed: ${transaction.orderId} ₹${transaction.amount} — merchant+QR balances updated`);
+
     // Route settlement to merchant's linked Razorpay account (non-blocking)
     setImmediate(async () => {
       try {
         const merchant = await Merchant.findById(transaction.merchantId);
 
         if (merchant && merchant.isRazorpayLinked && merchant.razorpayLinkedAccountId) {
-          // Partner Technology: Route payment to merchant's linked account
           const rzpPaymentId = transaction.cfPaymentId;
           if (rzpPaymentId && rzpPaymentId.startsWith('pay_')) {
+            const partnerService = require('./partnerService');
             await partnerService.createTransfer({
               paymentId: rzpPaymentId,
               merchantLinkedAccountId: merchant.razorpayLinkedAccountId,
               settlementAmount: transaction.settlementAmount,
               orderId: transaction.orderId,
             });
-            // Mark as settled via Route
             await Transaction.findByIdAndUpdate(transaction._id, {
               isSettled: true,
               settledAt: new Date(),
@@ -324,7 +364,6 @@ const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = nul
             });
             logger.info(`Route transfer done for tx ${transaction.orderId}: ₹${transaction.settlementAmount} → ${merchant.razorpayLinkedAccountId}`);
           } else {
-            // No linked account — use manual settlement queue
             logger.info(`Merchant ${merchant.merchantId} not linked to Razorpay Partner — queuing for manual settlement`);
           }
         }

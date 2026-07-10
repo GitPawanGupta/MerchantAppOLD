@@ -578,9 +578,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.08),
+              color: AppTheme.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.5)),
+              boxShadow: AppTheme.softShadow,
             ),
             child: Row(
               children: [
@@ -606,14 +607,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
-                          color: AppTheme.textPrimary,
+                          color: Color(0xFF1A1A2E),
                         ),
                       ),
                       Text(
                         'Switch between Razorpay & Cashfree',
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppTheme.textSecondary,
+                          color: Color(0xFF64748B),
                         ),
                       ),
                     ],

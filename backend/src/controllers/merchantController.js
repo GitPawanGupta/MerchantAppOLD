@@ -237,6 +237,33 @@ const deleteBankAccount = async (req, res, next) => {
   }
 };
 
+// ─── FCM Token ────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/merchant/fcm-token
+ * Registers or refreshes the merchant's FCM device token.
+ * Called by the Flutter app on login and whenever FCM refreshes the token.
+ */
+const registerFcmToken = async (req, res, next) => {
+  try {
+    const { fcmToken } = req.body;
+
+    if (!fcmToken || typeof fcmToken !== 'string' || fcmToken.trim() === '') {
+      return res.status(400).json({ success: false, message: 'fcmToken is required' });
+    }
+
+    const Merchant = require('../models/Merchant');
+    await Merchant.findByIdAndUpdate(req.merchant._id, {
+      fcmToken: fcmToken.trim(),
+      fcmTokenUpdatedAt: new Date(),
+    });
+
+    return successResponse(res, null, 'FCM token registered');
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   updateProfileValidation,
   kycValidation,
@@ -253,4 +280,5 @@ module.exports = {
   addBankAccount,
   setPrimaryBankAccount,
   deleteBankAccount,
+  registerFcmToken,
 };

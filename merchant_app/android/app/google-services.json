@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "309941963061",
+    "project_id": "pasu-ai-fd670",
+    "storage_bucket": "pasu-ai-fd670.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:309941963061:android:5df5ffd8032dd48eaae47c",
+        "android_client_info": {
+          "package_name": "com.pasuai.merchant"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSuRJh66iS-eT28JCrR_XwsqTPj4qkMJk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

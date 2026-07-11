@@ -94,4 +94,7 @@ router.post(
 router.post('/bank-accounts/:id/primary', merchantController.setPrimaryBankAccount);
 router.delete('/bank-accounts/:id', merchantController.deleteBankAccount);
 
+// FCM push notification token
+router.post('/fcm-token', merchantController.registerFcmToken);
+
 module.exports = router;

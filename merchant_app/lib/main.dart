@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/services/auth_service.dart';
 import 'core/theme/app_theme.dart';
@@ -36,6 +37,10 @@ import 'core/models/qr_model.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase (required before any Firebase service)
+  await Firebase.initializeApp();
+
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -60,7 +65,7 @@ class MerchantApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ISS Merchant',
+      title: 'Ppay For Merchant',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       home: const _Splash(),

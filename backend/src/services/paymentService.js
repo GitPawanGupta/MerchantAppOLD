@@ -396,6 +396,26 @@ const processQRCodeCreditedWebhook = async (rawBody, headers, payload) => {
 
   logger.info(`qr_code.credited processed: orderId=${orderId} ₹${amountRs} merchant=${merchant.merchantId} commission=₹${commissionAmount}`);
 
+  // ── Push notification (non-blocking) ─────────────────────────────────────
+  setImmediate(async () => {
+    try {
+      const merchantDoc = await Merchant.findById(merchant._id).select('fcmToken businessName');
+      if (merchantDoc?.fcmToken) {
+        const notificationService = require('./notificationService');
+        await notificationService.sendPaymentReceivedNotification(merchantDoc.fcmToken, {
+          amount:        amountRs,
+          orderId,
+          paymentMethod: method,
+          vpa:           vpa || '',
+          businessName:  merchantDoc.businessName || '',
+          qrLabel:       qr.label || qr.name || '',
+        });
+      }
+    } catch (notifErr) {
+      logger.error(`QR payment notification failed: ${notifErr.message}`);
+    }
+  });
+
   return {
     processed: true,
     orderId,
@@ -575,6 +595,25 @@ const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = nul
     ]);
 
     logger.info(`Payment confirmed: ${transaction.orderId} ₹${transaction.amount} — merchant+QR balances updated`);
+
+    // ── Push notification (non-blocking) ───────────────────────────────────
+    setImmediate(async () => {
+      try {
+        const merchantDoc = await Merchant.findById(transaction.merchantId).select('fcmToken businessName');
+        if (merchantDoc?.fcmToken) {
+          const notificationService = require('./notificationService');
+          await notificationService.sendPaymentReceivedNotification(merchantDoc.fcmToken, {
+            amount:        transaction.amount,
+            orderId:       transaction.orderId,
+            paymentMethod: transaction.paymentMethod || 'upi',
+            vpa:           transaction.upiTransactionId || '',
+            businessName:  merchantDoc.businessName || '',
+          });
+        }
+      } catch (notifErr) {
+        logger.error(`Payment notification failed: ${notifErr.message}`);
+      }
+    });
 
     // Route settlement to merchant's linked Razorpay account (non-blocking)
     setImmediate(async () => {

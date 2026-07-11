@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/services/notification_service.dart';
 import '../../core/theme/app_theme.dart';
 import 'dashboard_screen.dart';
 import '../qr/qr_list_screen.dart';
@@ -58,7 +59,19 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AuthProvider>().refreshProfile();
+      // Initialize notifications and register FCM token with backend
+      // Only for merchant users (admin has no FCM token endpoint)
+      _initNotifications();
     });
+  }
+
+  Future<void> _initNotifications() async {
+    try {
+      await NotificationService.initialize();
+      await NotificationService.getAndRegisterToken();
+    } catch (e) {
+      debugPrint('[HomeShell] Notification init error: $e');
+    }
   }
 
   @override

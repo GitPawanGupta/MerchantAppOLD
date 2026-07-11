@@ -4,6 +4,7 @@ backend/logs/
 backend/.env
 backend/uploads/kyc/*
 !backend/uploads/kyc/.gitkeep
+backend/src/config/firebase-service-account.json
 
 # Flutter
 merchant_app/.dart_tool/

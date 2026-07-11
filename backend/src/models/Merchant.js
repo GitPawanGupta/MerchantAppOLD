@@ -203,6 +203,18 @@ const merchantSchema = new mongoose.Schema(
       default: null,
     },
 
+    // ─── Push Notifications (FCM) ────────────────────────────────────────────
+    // Device token registered by the Flutter app on login / app open.
+    // Updated automatically when the app refreshes its FCM token.
+    fcmToken: {
+      type: String,
+      default: null,
+    },
+    fcmTokenUpdatedAt: {
+      type: Date,
+      default: null,
+    },
+
     // Wallet / balance tracking
     totalCollected: { type: Number, default: 0 },   // Total payments received
     totalSettled: { type: Number, default: 0 },      // Total amount settled

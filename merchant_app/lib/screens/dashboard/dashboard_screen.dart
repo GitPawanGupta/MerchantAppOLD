@@ -29,6 +29,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
   bool _hasPendingSettlement = false;
+  double _newPaymentsSinceSettlement = 0.0;
   StreamSubscription<Map<String, dynamic>>? _paymentSub;
 
   @override
@@ -85,6 +86,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       // Extract hasPendingSettlement flag from summary
       final summary = data['summary'] as Map<String, dynamic>? ?? {};
       _hasPendingSettlement = summary['hasPendingSettlement'] as bool? ?? false;
+      _newPaymentsSinceSettlement =
+          (summary['newPaymentsSinceSettlement'] as num?)?.toDouble() ?? 0.0;
 
       _fadeCtrl.forward();
     } on ApiException catch (e) {
@@ -520,6 +523,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                               PendingCard(
                                 amount: merchant?.pendingSettlement ?? 0,
                                 hasPendingSettlement: _hasPendingSettlement,
+                                newPaymentsSinceSettlement:
+                                    _newPaymentsSinceSettlement,
                                 onSettle: () =>
                                     _handleManualSettlement(context),
                               ),
@@ -624,19 +629,24 @@ class _KycBadge extends StatelessWidget {
 class PendingCard extends StatelessWidget {
   final double amount;
   final bool hasPendingSettlement;
+  final double newPaymentsSinceSettlement;
   final VoidCallback? onSettle;
 
   const PendingCard({
     super.key,
     required this.amount,
     required this.hasPendingSettlement,
+    this.newPaymentsSinceSettlement = 0.0,
     this.onSettle,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Show ₹0 if settlement is pending, otherwise show actual amount
-    final displayAmount = hasPendingSettlement ? 0.0 : amount;
+    // When settlement is pending/processing:
+    //   - Show amount locked in settlement as greyed out
+    //   - Show new payments received since settlement separately
+    // When no pending settlement:
+    //   - Show full pendingSettlement amount
     final isButtonEnabled = !hasPendingSettlement && amount >= 1;
 
     return GradientCard(
@@ -646,74 +656,144 @@ class PendingCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text(
-                        'Pending Settlement',
-                        style: TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
-                      if (hasPendingSettlement) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: Colors.orange.withValues(alpha: 0.5),
-                            ),
-                          ),
-                          child: const Text(
-                            'PROCESSING',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  AnimatedCounter(
-                    value: displayAmount,
-                    formatter: formatCurrency,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  if (hasPendingSettlement) ...[
-                    const SizedBox(height: 4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
                       children: [
-                        Icon(
-                          Icons.schedule,
-                          color: Colors.white.withValues(alpha: 0.7),
-                          size: 12,
+                        const Text(
+                          'Pending Settlement',
+                          style: TextStyle(color: Colors.white70, fontSize: 13),
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Settlement in progress',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.7),
-                            fontSize: 11,
+                        if (hasPendingSettlement) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                color: Colors.orange.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            child: const Text(
+                              'PROCESSING',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
+                    const SizedBox(height: 6),
+
+                    if (hasPendingSettlement) ...[
+                      // Settlement in progress — show locked amount
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            color: Colors.white.withValues(alpha: 0.6),
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            formatCurrency(amount - newPaymentsSinceSettlement),
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.65),
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.lineThrough,
+                              decorationColor: Colors.white.withValues(
+                                alpha: 0.4,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'in settlement',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      // New payments since settlement
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          const Icon(
+                            Icons.add_circle_outline,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 4),
+                          AnimatedCounter(
+                            value: newPaymentsSinceSettlement,
+                            formatter: formatCurrency,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'new',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.schedule,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            size: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Settlement in progress',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      // Normal state — show full pending amount
+                      AnimatedCounter(
+                        value: amount,
+                        formatter: formatCurrency,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
               Container(
                 padding: const EdgeInsets.all(14),

@@ -219,7 +219,7 @@ const getDashboardSummary = async (merchantId) => {
   chartStart.setDate(chartStart.getDate() - 6);
   chartStart.setHours(0, 0, 0, 0);
 
-  const [todayTx, recentTx, recentSettlements, chartTx, pendingSettlementCount] = await Promise.all([
+  const [todayTx, recentTx, recentSettlements, chartTx, pendingSettlementCount, newPaymentsSinceSettlement] = await Promise.all([
     Transaction.aggregate([
       {
         $match: {
@@ -265,8 +265,27 @@ const getDashboardSummary = async (merchantId) => {
     // Check for pending settlements
     Settlement.countDocuments({
       merchantId: merchant._id,
-      status: 'pending',
+      status: { $in: ['pending', 'processing'] },
     }),
+    // Sum of settlement amounts for transactions NOT linked to any settlement
+    // i.e., payments received AFTER the last settlement request was made
+    Transaction.aggregate([
+      {
+        $match: {
+          merchantId: merchant._id,
+          status: 'success',
+          isSettled: false,
+          settlementId: null,
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: '$settlementAmount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
   ]);
 
   const last7Days = [];
@@ -302,6 +321,10 @@ const getDashboardSummary = async (merchantId) => {
       totalSettled:      merchant.totalSettled,
       pendingSettlement: merchant.pendingSettlement,
       hasPendingSettlement: pendingSettlementCount > 0,
+      // Amount from new payments received AFTER settlement was requested
+      // (transactions with settlementId: null, i.e., not yet linked to any settlement)
+      newPaymentsSinceSettlement: newPaymentsSinceSettlement[0]?.total || 0,
+      newPaymentsSinceSettlementCount: newPaymentsSinceSettlement[0]?.count || 0,
     },
     today: todayTx[0]
       ? {

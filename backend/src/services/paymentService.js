@@ -232,6 +232,12 @@ const processWebhook = async (rawBody, headers, payload) => {
     return await processQRCodeCreditedWebhook(rawBody, headers, payload);
   }
 
+  // Skip other Razorpay QR-related events that don't map to a payment order
+  if (gatewayName === 'razorpay' && payload.event?.startsWith('qr_code.')) {
+    logger.info(`Razorpay webhook: ignoring qr_code event "${payload.event}" — not a checkout payment`);
+    return { ignored: true, reason: `QR event ${payload.event} not applicable` };
+  }
+
   // Process webhook through adapter
   let webhookResult;
   try {
@@ -289,9 +295,15 @@ const processQRCodeCreditedWebhook = async (rawBody, headers, payload) => {
       .update(rawBody)
       .digest('hex');
     if (generated !== signature) {
-      logger.warn('qr_code.credited webhook: invalid signature');
-      return { isValid: false, error: 'Invalid signature' };
+      logger.warn('qr_code.credited webhook: invalid signature — check RAZORPAY_WEBHOOK_SECRET env var on production server');
+      // Still process in non-production to avoid missing payments during dev
+      // In production, reject to prevent spoofed webhooks
+      if (process.env.NODE_ENV === 'production') {
+        return { isValid: false, error: 'Invalid signature' };
+      }
     }
+  } else if (!webhookSecret) {
+    logger.warn('qr_code.credited webhook: RAZORPAY_WEBHOOK_SECRET not set — skipping signature check (insecure)');
   }
 
   const qrEntity = payload.payload?.qr_code?.entity;

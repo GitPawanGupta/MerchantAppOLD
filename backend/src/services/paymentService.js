@@ -296,13 +296,11 @@ const processQRCodeCreditedWebhook = async (rawBody, headers, payload) => {
       .update(rawBody)
       .digest('hex');
     if (generated !== signature) {
-      // Secret is set in our env but Razorpay dashboard has no secret configured
-      // — this means Razorpay sends no signature, or sends a wrong one.
-      // Log warning but continue processing to avoid missing payments.
-      logger.warn('qr_code.credited webhook: signature mismatch — processing anyway (set secret in Razorpay dashboard to enforce)');
+      logger.warn('qr_code.credited webhook: invalid signature — rejecting');
+      return { isValid: false, error: 'Invalid signature' };
     }
+    logger.info('qr_code.credited webhook: signature verified successfully');
   } else if (!signature) {
-    // Razorpay dashboard has no webhook secret set — no signature sent
     logger.info('qr_code.credited webhook: no signature header — proceeding without verification');
   }
 

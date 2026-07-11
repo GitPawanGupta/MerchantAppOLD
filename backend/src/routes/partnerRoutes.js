@@ -10,13 +10,16 @@ router.get('/callback', partnerController.oauthCallback);
 router.post(
   '/webhook',
   webhookLimiter,
-  express.raw({ type: 'application/json' }),
   (req, res, next) => {
-    if (Buffer.isBuffer(req.body)) {
-      req.rawBody = req.body.toString('utf8');
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks);
+      req.rawBody = raw.toString('utf8');
       try { req.body = JSON.parse(req.rawBody); } catch { req.body = {}; }
-    }
-    next();
+      next();
+    });
+    req.on('error', next);
   },
   partnerController.partnerWebhook
 );

@@ -18,17 +18,26 @@ router.post(
 // Verify payment status (polled after redirect)
 router.get('/verify', paymentController.verifyPayment);
 
-// Razorpay webhook — raw body needed for HMAC-SHA256 signature verification
+// Razorpay webhook — MUST come before express.json() parses the body.
+// We capture the raw bytes here for HMAC-SHA256 signature verification.
 router.post(
   '/webhook',
   webhookLimiter,
-  express.raw({ type: 'application/json' }),
   (req, res, next) => {
-    if (Buffer.isBuffer(req.body)) {
-      req.rawBody = req.body.toString('utf8');
-      try { req.body = JSON.parse(req.rawBody); } catch { req.body = {}; }
-    }
-    next();
+    // Collect raw bytes — bypass any previously attached body parsers
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks);
+      req.rawBody = raw.toString('utf8');
+      try {
+        req.body = JSON.parse(req.rawBody);
+      } catch {
+        req.body = {};
+      }
+      next();
+    });
+    req.on('error', next);
   },
   paymentController.webhook
 );

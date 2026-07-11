@@ -362,226 +362,10 @@ class _DashboardScreenState extends State<DashboardScreen>
           slivers: [
             // ── Gradient header ─────────────────────────────────────
             SliverAppBar(
-              expandedHeight: 200,
+              expandedHeight: 160,
               pinned: true,
               backgroundColor: AppTheme.primary,
               elevation: 0,
-              flexibleSpace: FlexibleSpaceBar(
-                collapseMode: CollapseMode.pin,
-                background: Container(
-                  decoration: const BoxDecoration(
-                    gradient: AppTheme.headerGradient,
-                  ),
-                  child: Stack(
-                    children: [
-                      // Decorative circles background
-                      Positioned(
-                        top: -30,
-                        right: -20,
-                        child: Container(
-                          width: 160,
-                          height: 160,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.05),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 30,
-                        right: 60,
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.05),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: -40,
-                        left: -20,
-                        child: Container(
-                          width: 130,
-                          height: 130,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white.withValues(alpha: 0.04),
-                          ),
-                        ),
-                      ),
-                      // Content
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 56, 20, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Top row — greeting + KYC badge
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              _getGreeting(),
-                                              style: TextStyle(
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.75,
-                                                ),
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w400,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Flexible(
-                                            child: Text(
-                                              auth.user?.name
-                                                      .split(' ')
-                                                      .first ??
-                                                  '',
-                                              style: TextStyle(
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.75,
-                                                ),
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          const Text(
-                                            ' 👋',
-                                            style: TextStyle(fontSize: 13),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 3),
-                                      Text(
-                                        merchant?.businessName ?? 'My Business',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: -0.3,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                _KycBadge(
-                                  status: merchant?.kycStatus ?? 'pending',
-                                ),
-                              ],
-                            ),
-                            const Spacer(),
-                            // Bottom row — merchant ID + category
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.15,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.tag,
-                                        size: 11,
-                                        color: Colors.white.withValues(
-                                          alpha: 0.7,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        merchant?.merchantId ?? '—',
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.85,
-                                          ),
-                                          fontSize: 11,
-                                          fontFamily: 'monospace',
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (merchant?.businessCategory != null) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.10,
-                                      ),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.12,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.storefront_outlined,
-                                          size: 11,
-                                          color: Colors.white.withValues(
-                                            alpha: 0.7,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          _capitalize(
-                                            merchant?.businessCategory ?? '',
-                                          ),
-                                          style: TextStyle(
-                                            color: Colors.white.withValues(
-                                              alpha: 0.75,
-                                            ),
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
               actions: [
                 // Notification bell
                 Consumer<NotificationProvider>(
@@ -630,6 +414,102 @@ class _DashboardScreenState extends State<DashboardScreen>
                   onPressed: _load,
                 ),
               ],
+              flexibleSpace: FlexibleSpaceBar(
+                collapseMode: CollapseMode.pin,
+                background: Container(
+                  decoration: const BoxDecoration(
+                    gradient: AppTheme.headerGradient,
+                  ),
+                  child: Stack(
+                    children: [
+                      // Decorative bg circles
+                      Positioned(
+                        top: -30,
+                        right: -20,
+                        child: Container(
+                          width: 160,
+                          height: 160,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.05),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: -40,
+                        left: -20,
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white.withValues(alpha: 0.04),
+                          ),
+                        ),
+                      ),
+                      // Content — padding top accounts for status bar + app bar
+                      SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 4, 100, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              // Greeting
+                              Text(
+                                '${_getGreeting()} ${auth.user?.name.split(' ').first ?? ''} 👋',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.78),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              // Business name
+                              Text(
+                                merchant?.businessName ?? 'My Business',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.3,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 10),
+                              // ID chip + KYC badge in one row
+                              Row(
+                                children: [
+                                  _HeaderChip(
+                                    icon: Icons.tag,
+                                    label: merchant?.merchantId ?? '—',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _KycBadge(
+                                    status: merchant?.kycStatus ?? 'pending',
+                                  ),
+                                  if (merchant?.businessCategory != null) ...[
+                                    const SizedBox(width: 8),
+                                    _HeaderChip(
+                                      icon: Icons.storefront_outlined,
+                                      label: _capitalize(
+                                        merchant!.businessCategory!,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
 
             if (_loading)
@@ -761,7 +641,7 @@ class _KycBadge extends StatelessWidget {
     final isApproved = status == 'approved';
     final color = isApproved ? Colors.greenAccent : Colors.orangeAccent;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
@@ -772,7 +652,7 @@ class _KycBadge extends StatelessWidget {
         children: [
           Icon(
             isApproved ? Icons.verified : Icons.pending_outlined,
-            size: 13,
+            size: 12,
             color: color,
           ),
           const SizedBox(width: 4),
@@ -1198,6 +1078,41 @@ class RecentTxTile extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Header chip (ID / category) ───────────────────────────────────────────
+class _HeaderChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _HeaderChip({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: Colors.white.withValues(alpha: 0.75)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.88),
+              fontSize: 11,
+              fontFamily: 'monospace',
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }

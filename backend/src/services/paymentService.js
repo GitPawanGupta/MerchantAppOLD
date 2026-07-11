@@ -400,6 +400,22 @@ const processQRCodeCreditedWebhook = async (rawBody, headers, payload) => {
   setImmediate(async () => {
     try {
       const merchantDoc = await Merchant.findById(merchant._id).select('fcmToken businessName');
+      const Notification = require('../models/Notification');
+
+      // Save to DB first (always, even without FCM token)
+      await Notification.create({
+        merchantId: merchant._id,
+        type: 'payment_received',
+        title: `💰 Payment Received — ₹${amountRs.toLocaleString('en-IN')}`,
+        body: [
+          vpa ? `From: ${vpa}` : null,
+          qr.label || qr.name ? `QR: ${qr.label || qr.name}` : null,
+          `via ${(method || 'upi').toUpperCase()}`,
+        ].filter(Boolean).join('  •  '),
+        data: { orderId, amount: amountRs, paymentMethod: method, vpa: vpa || '' },
+      });
+
+      // Send FCM if token available
       if (merchantDoc?.fcmToken) {
         const notificationService = require('./notificationService');
         await notificationService.sendPaymentReceivedNotification(merchantDoc.fcmToken, {
@@ -600,6 +616,24 @@ const applyPaymentUpdate = async (transaction, paymentData, webhookPayload = nul
     setImmediate(async () => {
       try {
         const merchantDoc = await Merchant.findById(transaction.merchantId).select('fcmToken businessName');
+        const Notification = require('../models/Notification');
+
+        await Notification.create({
+          merchantId: transaction.merchantId,
+          type: 'payment_received',
+          title: `💰 Payment Received — ₹${transaction.amount.toLocaleString('en-IN')}`,
+          body: [
+            transaction.upiTransactionId ? `From: ${transaction.upiTransactionId}` : null,
+            `via ${(transaction.paymentMethod || 'upi').toUpperCase()}`,
+          ].filter(Boolean).join('  •  '),
+          data: {
+            orderId:       transaction.orderId,
+            amount:        transaction.amount,
+            paymentMethod: transaction.paymentMethod,
+            vpa:           transaction.upiTransactionId || '',
+          },
+        });
+
         if (merchantDoc?.fcmToken) {
           const notificationService = require('./notificationService');
           await notificationService.sendPaymentReceivedNotification(merchantDoc.fcmToken, {

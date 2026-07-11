@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -260,7 +259,7 @@ class _QRDetailScreenState extends State<QRDetailScreen> {
                                             ),
                                           );
                                         },
-                                        errorBuilder: (_, __, ___) =>
+                                        errorBuilder: (context, error, stack) =>
                                             QrImageView(
                                               data: qr.paymentUrl,
                                               version: QrVersions.auto,

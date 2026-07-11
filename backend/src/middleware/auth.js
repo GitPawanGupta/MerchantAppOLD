@@ -83,3 +83,6 @@ const attachMerchant = async (req, res, next) => {
 };
 
 module.exports = { authenticate, authorize, attachMerchant };
+
+// ─── Shorthand: require admin role ───────────────────────────────────────────
+module.exports.requireAdmin = authorize('admin');

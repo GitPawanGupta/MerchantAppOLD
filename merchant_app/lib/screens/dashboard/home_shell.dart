@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/providers/notification_provider.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/theme/app_theme.dart';
 import 'dashboard_screen.dart';
@@ -67,8 +68,13 @@ class _HomeShellState extends State<HomeShell> {
 
   Future<void> _initNotifications() async {
     try {
+      // Set role as merchant before fetching
+      context.read<NotificationProvider>().setRole(isAdmin: false);
       await NotificationService.initialize();
       await NotificationService.getAndRegisterToken();
+      if (mounted) {
+        await context.read<NotificationProvider>().fetchNotifications();
+      }
     } catch (e) {
       debugPrint('[HomeShell] Notification init error: $e');
     }

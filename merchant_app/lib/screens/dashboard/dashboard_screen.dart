@@ -3,6 +3,7 @@ import 'package:confetti/confetti.dart';
 import 'package:merchant_app/screens/dashboard/widgets/today_card.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
+import '../../core/providers/notification_provider.dart';
 import '../../core/services/api_service.dart';
 import '../../core/models/transaction_model.dart';
 import '../../core/models/bank_account_model.dart';
@@ -391,6 +392,48 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
               actions: [
+                // Notification bell
+                Consumer<NotificationProvider>(
+                  builder: (context, np, child) => Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.notifications_outlined,
+                          color: Colors.white,
+                        ),
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/notifications');
+                        },
+                      ),
+                      if (np.unreadCount > 0)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEF4444),
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              np.unreadCount > 99 ? '99+' : '${np.unreadCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
                 IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   onPressed: _load,

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../core/providers/notification_provider.dart';
 import '../../core/theme/app_theme.dart';
 import 'admin_dashboard_screen.dart';
 import 'admin_merchants_screen.dart';
@@ -15,6 +17,16 @@ class AdminShell extends StatefulWidget {
 
 class _AdminShellState extends State<AdminShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Set role as admin before fetching
+      context.read<NotificationProvider>().setRole(isAdmin: true);
+      context.read<NotificationProvider>().fetchNotifications();
+    });
+  }
 
   static const _tabs = [
     NavigationDestination(

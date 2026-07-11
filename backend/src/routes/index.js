@@ -9,6 +9,7 @@ const settlementRoutes = require('./settlementRoutes');
 const reportingRoutes = require('./reportingRoutes');
 const adminRoutes = require('./adminRoutes');
 const partnerRoutes = require('./partnerRoutes');
+const notificationRoutes = require('./notificationRoutes');
 
 // Health check — no auth
 router.get('/health', (req, res) => {
@@ -29,5 +30,6 @@ router.use('/settlement', settlementRoutes);
 router.use('/reports', reportingRoutes);
 router.use('/admin', adminRoutes);
 router.use('/partner', partnerRoutes);
+router.use('/notifications', notificationRoutes);
 
 module.exports = router;

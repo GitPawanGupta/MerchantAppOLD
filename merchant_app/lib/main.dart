@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'core/providers/auth_provider.dart';
+import 'core/providers/notification_provider.dart';
 import 'core/services/auth_service.dart';
 import 'core/theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
@@ -33,6 +34,7 @@ import 'screens/admin/admin_merchants_screen.dart';
 import 'screens/admin/admin_settlements_screen.dart';
 import 'screens/admin/admin_transactions_screen.dart';
 import 'screens/admin/admin_gateway_screen.dart';
+import 'screens/notifications/notifications_screen.dart';
 import 'core/models/qr_model.dart';
 
 void main() async {
@@ -52,8 +54,13 @@ void main() async {
     ),
   );
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthProvider()..init(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()..init()),
+        // NotificationProvider is role-aware — set isAdmin based on user role
+        // after login. HomeShell and AdminShell will call fetchNotifications().
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+      ],
       child: const MerchantApp(),
     ),
   );
@@ -156,6 +163,10 @@ class MerchantApp extends StatelessWidget {
         return _slide(const BankAccountsScreen());
       case '/change-password':
         return _slide(const ChangePasswordScreen());
+
+      // ── Notifications ──────────────────────────────────────────────────────
+      case '/notifications':
+        return _slide(const NotificationsScreen());
 
       default:
         return _slide(const LoginScreen());

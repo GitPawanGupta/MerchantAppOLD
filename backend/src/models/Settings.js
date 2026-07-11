@@ -41,7 +41,7 @@ const settingsSchema = new mongoose.Schema(
 );
 
 // ─── Indexes ──────────────────────────────────────────────────────────────────
-settingsSchema.index({ key: 1 });
+// Note: { key: 1 } index is already created by unique:true on the key field above
 settingsSchema.index({ category: 1, isActive: 1 });
 
 // ─── Static Methods ───────────────────────────────────────────────────────────

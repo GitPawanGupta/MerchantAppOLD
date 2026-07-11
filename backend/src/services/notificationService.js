@@ -15,17 +15,28 @@ const _initFirebase = () => {
     if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
       credential = admin.credential.cert(serviceAccount);
+      logger.info('Firebase Admin SDK initializing from FIREBASE_SERVICE_ACCOUNT env var...');
     } else {
       const serviceAccountPath = path.join(
         __dirname,
         '../config/firebase-service-account.json'
       );
+      // If file doesn't exist either, log clearly and bail
+      const fs = require('fs');
+      if (!fs.existsSync(serviceAccountPath)) {
+        logger.error(
+          'Firebase Admin SDK NOT initialized — FIREBASE_SERVICE_ACCOUNT env var is missing ' +
+          'and firebase-service-account.json file not found. Push notifications will be disabled.'
+        );
+        return;
+      }
       credential = admin.credential.cert(serviceAccountPath);
+      logger.info('Firebase Admin SDK initializing from local service account file...');
     }
 
     admin.initializeApp({ credential });
     _initialized = true;
-    logger.info('Firebase Admin SDK initialized');
+    logger.info('Firebase Admin SDK initialized successfully');
   } catch (err) {
     logger.error(`Firebase Admin init failed: ${err.message}`);
   }

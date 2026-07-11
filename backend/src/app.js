@@ -12,6 +12,12 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimiter');
 const logger = require('./utils/logger');
 
+// ─── Initialize Firebase Admin SDK at startup ────────────────────────────────
+// Eagerly require so "Firebase Admin SDK initialized" appears in startup logs.
+// If FIREBASE_SERVICE_ACCOUNT env var is missing the service logs an error but
+// the app continues to run — notifications will simply be skipped.
+require('./services/notificationService');
+
 const app = express();
 
 // ─── Trust Proxy (for Railway/Render deployments behind reverse proxy) ───────

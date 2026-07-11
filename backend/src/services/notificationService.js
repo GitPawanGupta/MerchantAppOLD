@@ -8,13 +8,22 @@ let _initialized = false;
 const _initFirebase = () => {
   if (_initialized) return;
   try {
-    const serviceAccountPath = path.join(
-      __dirname,
-      '../config/firebase-service-account.json'
-    );
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccountPath),
-    });
+    let credential;
+
+    // Production: load from FIREBASE_SERVICE_ACCOUNT env variable (JSON string)
+    // Development: load from local file
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+      credential = admin.credential.cert(serviceAccount);
+    } else {
+      const serviceAccountPath = path.join(
+        __dirname,
+        '../config/firebase-service-account.json'
+      );
+      credential = admin.credential.cert(serviceAccountPath);
+    }
+
+    admin.initializeApp({ credential });
     _initialized = true;
     logger.info('Firebase Admin SDK initialized');
   } catch (err) {

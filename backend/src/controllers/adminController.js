@@ -480,6 +480,25 @@ const updateTransactionStatus = async (req, res, next) => {
         `Updated merchant ${tx.merchantId.merchantId} balance. ` +
         `Settlement amount: ₹${tx.settlementAmount}, Commission: ₹${tx.commissionAmount}`
       );
+
+      // Push notification (non-blocking)
+      setImmediate(async () => {
+        try {
+          const merchantDoc = await Merchant.findById(tx.merchantId._id).select('fcmToken businessName');
+          if (merchantDoc?.fcmToken) {
+            const notificationService = require('../services/notificationService');
+            await notificationService.sendPaymentReceivedNotification(merchantDoc.fcmToken, {
+              amount:        tx.amount,
+              orderId:       tx.orderId,
+              paymentMethod: tx.paymentMethod || 'upi',
+              vpa:           tx.upiTransactionId || '',
+              businessName:  merchantDoc.businessName || '',
+            });
+          }
+        } catch (notifErr) {
+          logger.error(`Admin tx update notification failed: ${notifErr.message}`);
+        }
+      });
     }
 
     return successResponse(

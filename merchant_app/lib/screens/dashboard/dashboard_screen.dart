@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart' hide RadioGroup;
 import 'package:confetti/confetti.dart';
 import 'package:merchant_app/screens/dashboard/widgets/today_card.dart';
@@ -27,7 +28,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   String? _error;
   late AnimationController _fadeCtrl;
   late Animation<double> _fadeAnim;
-  bool _hasPendingSettlement = false; // Track if settlement is pending
+  bool _hasPendingSettlement = false;
+  StreamSubscription<Map<String, dynamic>>? _paymentSub;
 
   @override
   void initState() {
@@ -39,10 +41,29 @@ class _DashboardScreenState extends State<DashboardScreen>
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
     _confettiCtrl = ConfettiController(duration: const Duration(seconds: 2));
     _load();
+
+    // Subscribe after first frame so provider is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _paymentSub = context
+          .read<NotificationProvider>()
+          .onPaymentReceived
+          .listen(_onPaymentArrived);
+    });
+  }
+
+  /// Called when FCM payment_received message arrives while app is open.
+  /// Refreshes dashboard data + merchant wallet balance automatically.
+  void _onPaymentArrived(Map<String, dynamic> data) {
+    debugPrint('[DashboardScreen] Payment arrived — auto refreshing...');
+    _load();
+    context.read<AuthProvider>().refreshProfile();
+    // Play confetti for a delightful UX
+    _confettiCtrl.play();
   }
 
   @override
   void dispose() {
+    _paymentSub?.cancel();
     _confettiCtrl.dispose();
     _fadeCtrl.dispose();
     super.dispose();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/notification_model.dart';
 import '../services/api_service.dart';
@@ -8,9 +9,22 @@ class NotificationProvider extends ChangeNotifier {
   bool _loading = false;
   bool _isAdmin = false;
 
+  // Stream that fires whenever a payment_received event comes in
+  // DashboardScreen listens to this to auto-refresh
+  final _paymentStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onPaymentReceived =>
+      _paymentStreamController.stream;
+
   List<AppNotification> get notifications => _notifications;
   int get unreadCount => _unreadCount;
   bool get loading => _loading;
+
+  @override
+  void dispose() {
+    _paymentStreamController.close();
+    super.dispose();
+  }
 
   // Called by HomeShell (merchant) or AdminShell (admin) after mount
   void setRole({required bool isAdmin}) {
@@ -19,6 +33,32 @@ class NotificationProvider extends ChangeNotifier {
       _notifications = [];
       _unreadCount = 0;
     }
+  }
+
+  /// Called by NotificationService when a payment FCM message arrives.
+  /// Triggers auto-refresh on DashboardScreen via stream.
+  void notifyPaymentReceived(Map<String, dynamic> data) {
+    // Add to in-app notifications list immediately (optimistic)
+    final title =
+        data['title'] as String? ??
+        '💰 Payment Received — ₹${data['amount'] ?? ''}';
+    final body = data['body'] as String? ?? '';
+
+    final newNotif = AppNotification(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      type: 'payment_received',
+      title: title,
+      body: body,
+      data: data,
+      isRead: false,
+      createdAt: DateTime.now(),
+    );
+    _notifications.insert(0, newNotif);
+    _unreadCount += 1;
+    notifyListeners();
+
+    // Emit on stream so DashboardScreen refreshes wallet
+    _paymentStreamController.add(data);
   }
 
   String get _endpoint =>

@@ -21,28 +21,37 @@ class NotificationService {
 
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
 
+  // Callback — set by HomeShell to forward payment events to NotificationProvider
+  static void Function(Map<String, dynamic>)? _paymentReceivedCallback;
+
+  static void setPaymentReceivedCallback(
+    void Function(Map<String, dynamic>) callback,
+  ) {
+    _paymentReceivedCallback = callback;
+  }
+
   // Android notification channel for payment alerts
   static const AndroidNotificationChannel _paymentChannel =
       AndroidNotificationChannel(
-    'payment_alerts',       // must match backend channelId
-    'Payment Alerts',
-    description: 'Notifications for incoming payments via QR scan',
-    importance: Importance.max,
-    playSound: true,
-    enableVibration: true,
-    enableLights: true,
-    ledColor: Color(0xFF1976D2),
-  );
+        'payment_alerts', // must match backend channelId
+        'Payment Alerts',
+        description: 'Notifications for incoming payments via QR scan',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        ledColor: Color(0xFF1976D2),
+      );
 
   // Android notification channel for settlement updates
   static const AndroidNotificationChannel _settlementChannel =
       AndroidNotificationChannel(
-    'settlement_updates',
-    'Settlement Updates',
-    description: 'Notifications for settlement status changes',
-    importance: Importance.high,
-    playSound: true,
-  );
+        'settlement_updates',
+        'Settlement Updates',
+        description: 'Notifications for settlement status changes',
+        importance: Importance.high,
+        playSound: true,
+      );
 
   // ── Initialize ──────────────────────────────────────────────────────────────
   static Future<void> initialize() async {
@@ -65,7 +74,7 @@ class NotificationService {
     // 2. Setup local notifications plugin
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosInit = DarwinInitializationSettings(
-      requestAlertPermission: false,  // already requested via FCM
+      requestAlertPermission: false, // already requested via FCM
       requestBadgePermission: false,
       requestSoundPermission: false,
     );
@@ -77,7 +86,8 @@ class NotificationService {
     // 3. Create Android notification channels
     final androidPlugin = _localNotifications
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>();
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await androidPlugin?.createNotificationChannel(_paymentChannel);
     await androidPlugin?.createNotificationChannel(_settlementChannel);
 
@@ -87,20 +97,31 @@ class NotificationService {
     // 5. Handle foreground messages — FCM won't auto-show heads-up on Android
     //    when app is in foreground, so we show local notification manually
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('[NotificationService] Foreground message: ${message.messageId}');
+      debugPrint(
+        '[NotificationService] Foreground message: ${message.messageId}',
+      );
       _showLocalNotification(message);
+
+      // If payment received — notify provider to auto-refresh dashboard
+      if (message.data['type'] == 'payment_received') {
+        _paymentReceivedCallback?.call(message.data);
+      }
     });
 
     // 6. Handle notification tap when app is in background (not terminated)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      debugPrint('[NotificationService] Notification tapped (background): ${message.data}');
+      debugPrint(
+        '[NotificationService] Notification tapped (background): ${message.data}',
+      );
       _handleNotificationTap(message.data);
     });
 
     // 7. Handle notification tap when app was terminated
     final initial = await _fcm.getInitialMessage();
     if (initial != null) {
-      debugPrint('[NotificationService] App opened from terminated via notification');
+      debugPrint(
+        '[NotificationService] App opened from terminated via notification',
+      );
       _handleNotificationTap(initial.data);
     }
 
@@ -119,7 +140,9 @@ class NotificationService {
     try {
       final token = await _fcm.getToken();
       if (token != null) {
-        debugPrint('[NotificationService] FCM token: ${token.substring(0, 20)}...');
+        debugPrint(
+          '[NotificationService] FCM token: ${token.substring(0, 20)}...',
+        );
         await _registerTokenWithBackend(token);
       }
 
@@ -198,7 +221,9 @@ class NotificationService {
 
   // ── Handle notification tap ─────────────────────────────────────────────────
   static void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('[NotificationService] Local notification tapped: ${response.payload}');
+    debugPrint(
+      '[NotificationService] Local notification tapped: ${response.payload}',
+    );
     // Navigation is handled at app level — payload carries the type
   }
 
@@ -213,7 +238,8 @@ class NotificationService {
     if (Platform.isIOS) {
       await _localNotifications
           .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
+            IOSFlutterLocalNotificationsPlugin
+          >()
           ?.requestPermissions(badge: true);
     }
   }

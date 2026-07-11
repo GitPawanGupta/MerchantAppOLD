@@ -71,6 +71,14 @@ class _HomeShellState extends State<HomeShell> {
       // Set role as merchant before fetching
       context.read<NotificationProvider>().setRole(isAdmin: false);
       await NotificationService.initialize();
+
+      // Wire FCM foreground payment events → NotificationProvider → DashboardScreen
+      NotificationService.setPaymentReceivedCallback((data) {
+        if (mounted) {
+          context.read<NotificationProvider>().notifyPaymentReceived(data);
+        }
+      });
+
       await NotificationService.getAndRegisterToken();
       if (mounted) {
         await context.read<NotificationProvider>().fetchNotifications();

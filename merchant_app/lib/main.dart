@@ -276,7 +276,7 @@ class _SplashState extends State<_Splash> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E), // deep navy — premium dark bg
+      backgroundColor: const Color(0xFFFAF8F5), // premium warm ivory
       body: Stack(
         children: [
           // Subtle radial glow at center
@@ -288,7 +288,9 @@ class _SplashState extends State<_Splash> with TickerProviderStateMixin {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF6C63FF).withValues(alpha: 0.18),
+                    const Color(
+                      0xFFB8960C,
+                    ).withValues(alpha: 0.10), // gold glow
                     Colors.transparent,
                   ],
                 ),
@@ -315,10 +317,16 @@ class _SplashState extends State<_Splash> with TickerProviderStateMixin {
                         boxShadow: [
                           BoxShadow(
                             color: const Color(
-                              0xFF6C63FF,
-                            ).withValues(alpha: 0.4),
-                            blurRadius: 32,
-                            spreadRadius: 4,
+                              0xFFB8960C,
+                            ).withValues(alpha: 0.22),
+                            blurRadius: 40,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 8),
+                          ),
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.06),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
@@ -343,7 +351,7 @@ class _SplashState extends State<_Splash> with TickerProviderStateMixin {
                         const Text(
                           'PPay',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF1A237E), // deep navy — on light bg
                             fontSize: 32,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 1.5,
@@ -353,9 +361,9 @@ class _SplashState extends State<_Splash> with TickerProviderStateMixin {
                         Text(
                           'Payments. Trust. Growth.',
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.55),
+                            color: Color(0xFF9E8A5A), // muted gold
                             fontSize: 13,
-                            fontWeight: FontWeight.w400,
+                            fontWeight: FontWeight.w500,
                             letterSpacing: 2.0,
                           ),
                         ),
@@ -380,7 +388,7 @@ class _SplashState extends State<_Splash> with TickerProviderStateMixin {
                   height: 32,
                   child: CircularProgressIndicator(
                     valueColor: AlwaysStoppedAnimation(
-                      Colors.white.withValues(alpha: 0.4),
+                      const Color(0xFFB8960C).withValues(alpha: 0.5), // gold
                     ),
                     strokeWidth: 1.5,
                   ),

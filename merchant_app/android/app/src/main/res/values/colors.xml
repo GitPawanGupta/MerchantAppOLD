@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
-    <!-- Splash screen background — matches AppTheme.primary -->
-    <color name="splashBg">#1A1A2E</color>
+    <!-- Splash screen background — premium warm ivory, matches Flutter splash -->
+    <color name="splashBg">#FAF8F5</color>
 </resources>

@@ -429,26 +429,34 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     children: [
                                       Row(
                                         children: [
-                                          Text(
-                                            _getGreeting(),
-                                            style: TextStyle(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.75,
+                                          Flexible(
+                                            child: Text(
+                                              _getGreeting(),
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.75,
+                                                ),
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w400,
                                               ),
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w400,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                           const SizedBox(width: 4),
-                                          Text(
-                                            auth.user?.name.split(' ').first ??
-                                                '',
-                                            style: TextStyle(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.75,
+                                          Flexible(
+                                            child: Text(
+                                              auth.user?.name
+                                                      .split(' ')
+                                                      .first ??
+                                                  '',
+                                              style: TextStyle(
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.75,
+                                                ),
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
                                               ),
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                           const Text(
@@ -821,9 +829,15 @@ class PendingCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const Text(
-                          'Pending Settlement',
-                          style: TextStyle(color: Colors.white70, fontSize: 13),
+                        const Flexible(
+                          child: Text(
+                            'Pending Settlement',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         if (hasPendingSettlement) ...[
                           const SizedBox(width: 6),

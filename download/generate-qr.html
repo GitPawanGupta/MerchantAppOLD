@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate QR Code - ISS Merchant App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .qr-container {
+            margin: 30px 0;
+            padding: 30px;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 15px;
+            display: inline-block;
+        }
+        canvas {
+            border: 10px solid white;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .info {
+            background: #f0f4ff;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 ISS Merchant App - QR Code Generator</h1>
+    
+    <div class="info">
+        <h3>Generate High-Resolution QR Code</h3>
+        <p>This QR code can be used for:</p>
+        <ul style="text-align: left; display: inline-block;">
+            <li>Printing on posters/flyers</li>
+            <li>WhatsApp sharing</li>
+            <li>Social media posts</li>
+            <li>Business cards</li>
+        </ul>
+    </div>
+    
+    <label><strong>Enter APK Download URL:</strong></label>
+    <input type="text" id="urlInput" placeholder="https://yourdomain.com/download/app-release.apk" value="https://yourdomain.com/download/app-release.apk">
+    
+    <br><br>
+    
+    <button onclick="generateQR()">Generate QR Code</button>
+    <button onclick="downloadQR()">Download PNG</button>
+    
+    <div class="qr-container">
+        <canvas id="qrCanvas"></canvas>
+    </div>
+    
+    <p><strong>Right-click on QR code → Save Image As...</strong></p>
+    
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script>
+        const canvas = document.getElementById('qrCanvas');
+        
+        function generateQR() {
+            const url = document.getElementById('urlInput').value;
+            
+            if (!url) {
+                alert('Please enter a URL');
+                return;
+            }
+            
+            QRCode.toCanvas(canvas, url, {
+                width: 400,
+                margin: 4,
+                color: {
+                    dark: '#2d3748',
+                    light: '#ffffff'
+                },
+                errorCorrectionLevel: 'H'
+            }, function (error) {
+                if (error) {
+                    alert('Error generating QR code: ' + error);
+                } else {
+                    console.log('QR code generated successfully!');
+                }
+            });
+        }
+        
+        function downloadQR() {
+            const link = document.createElement('a');
+            link.download = 'ISS-Merchant-QR-Code.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+        
+        // Generate on page load
+        window.onload = generateQR;
+    </script>
+</body>
+</html>

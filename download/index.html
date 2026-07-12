@@ -545,7 +545,7 @@
         <!-- Stats -->
         <div class="stats">
             <div class="stat-item">
-                <span class="stat-value">2%</span>
+                <span class="stat-value">3%</span>
                 <span class="stat-label">Commission</span>
             </div>
             <div class="stat-item">
@@ -562,10 +562,12 @@
         <div class="qr-section">
             <h3>📱 Scan to Download Instantly</h3>
             <div class="qr-code" id="qrcode">
-                <!-- Direct Google Charts API QR Code - Always Works! -->
-                <img src="https://chart.googleapis.com/chart?cht=qr&chs=250x250&chl=https://gitpawangupta.github.io/MerchantAppOLD/download/app-release.apk&choe=UTF-8" 
+                <!-- QR Code with fallback -->
+                <img id="qrImage" 
+                     src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=https://gitpawangupta.github.io/MerchantAppOLD/download/app-release.apk" 
                      alt="Download QR Code" 
-                     style="width: 100%; height: 100%; border-radius: 10px;">
+                     style="width: 100%; height: 100%; border-radius: 10px;"
+                     onerror="this.onerror=null; this.src='https://chart.googleapis.com/chart?cht=qr&chs=250x250&chl=https://gitpawangupta.github.io/MerchantAppOLD/download/app-release.apk&choe=UTF-8';">
             </div>
             <p class="qr-text">Open camera app and scan this QR code</p>
         </div>
@@ -632,8 +634,8 @@
             <p style="margin-top: 15px;">
                 <strong>Need Help?</strong><br>
                 Email: <a href="mailto:support@ppaymerchant.com">support@ppaymerchant.com</a><br>
-                Phone: <a href="tel:+91XXXXXXXXXX">+91-XXXXX-XXXXX</a><br>
-                WhatsApp: <a href="https://wa.me/91XXXXXXXXXX">+91-XXXXX-XXXXX</a>
+                Phone: <a href="tel:+91 9795635252">+91-XXXXX-XXXXX</a><br>
+                WhatsApp: <a href="https://wa.me/91XXXXXXXXXX">+91-9795635252</a>
             </p>
             <p style="margin-top: 15px; font-size: 12px; color: #94a3b8;">
                 © 2024 Ppay Merchant. All rights reserved.<br>
